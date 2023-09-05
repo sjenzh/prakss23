@@ -33,7 +33,7 @@ def check(cb):
 
 @route('/test')
 def fetch_info():
-   return str(request)
+   return template("Test result: {{result}}", result=request.result)
 
 @route('/get_matching_message')
 def index():
