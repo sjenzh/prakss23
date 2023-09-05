@@ -31,6 +31,11 @@ def check(cb):
   #   database.rules.alsoadd cb
   print('test')
 
+@route('/test')
+def fetch_info():
+   print(request.headers)
+   return ""
+
 @route('/get_matching_message')
 def index():
     response.content_type = "text/plain; charset=UTF-8"
