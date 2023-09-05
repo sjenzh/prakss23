@@ -1,5 +1,11 @@
-$#template to generate HTML tables from a list of tuples?
-<link rel="stylesheet" type="text/css" href="queues.css" />
+<style>
+.row {
+    display: flex;
+  }
+.column {
+    flex: 50%;
+}
+</style>
 <div class="row">
   <div class="column">
     <h2><b>Rule Queue</b></h2>

@@ -1,11 +1,25 @@
 #!/usr/bin/python3
 import os, time, requests
-from bottle import route, run, template, response, request
+import sqlite3
+from pathlib import Path
 from threading import Thread
+
+from bottle import route, run, template, response, request
+from bottle import TEMPLATE_PATH
+
+TEMPLATE_PATH.append(str(Path('prakss23')/ 'views'))
 
 @route('/')
 def index():
-   return "Hello"
+   conn = sqlite3.connect('database.db')
+   c = conn.cursor()
+   c.execute('SELECT title FROM rules')
+   rules_res = c.fetchall()
+   c.execute('SELECT title FROM messages')
+   messages_res = c.fetchall()
+   c.close()
+   output = template('make_queues', {'rules':rules_res, 'messages':messages_res})
+   return output
 
 def check(cb):
   # check the database if the parts of the rule match any message in the database

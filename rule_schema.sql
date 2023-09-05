@@ -5,5 +5,5 @@ CREATE TABLE rules (
     created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
-    persistent BOOLEAN NOT NULL DEFAULT 0,
+    persistent BOOLEAN NOT NULL DEFAULT 0
 );
