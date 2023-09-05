@@ -33,8 +33,7 @@ def check(cb):
 
 @route('/test')
 def fetch_info():
-   print(request.headers)
-   return ""
+   return str(request)
 
 @route('/get_matching_message')
 def index():
