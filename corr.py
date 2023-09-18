@@ -21,7 +21,7 @@ def index():
    output = template('make_queues', {'rules':rules_res, 'messages':messages_res})
    return output
 
-def check(cb):
+def check(cb,params):
   # check the database if the parts of the rule match any message in the database
   # if we find a message in database
   #   requests.put(cb, data ={'subject': database.line.subject, 'date': database.line.sent, 'sender': database.line.sender, 'text': database.line.text})
@@ -29,17 +29,18 @@ def check(cb):
   # else # we store the rule in the database
   #   database.rules.addnewentry senderpattern, subjectpattern, textpattern, datepattern
   #   database.rules.alsoadd cb
-  print('test')
+  print(cb)
+  print(params)
 
 @route('/test')
 def fetch_info():
-   return template("Test result: {{result}}", result=request.result)
+   return template("Test result: {{result}}", result=request)
 
 @route('/get_matching_message')
 def index():
     response.content_type = "text/plain; charset=UTF-8"
     response.headers["CPEE-CALLBACK"] = "true"
-    thread = Thread(target=check, args=[request.headers['Cpee-Callback']])
+    thread = Thread(target=check, args=[request.headers['Cpee-Callback'],request.params])
     thread.start()
     return ""
 
