@@ -2,6 +2,8 @@
 #https://humberto.io/blog/sending-and-receiving-emails-with-python/
 import email
 import imaplib
+import base64
+import sqlite3
 
 EMAIL = 'prakss23@gmail.com'
 PASSWORD = 'flbycwtypcqgszjd'
@@ -91,10 +93,16 @@ for i in mail_ids:
 
             # who sent the message and its subject
 
+            print('Details, Message:')
+            # print(message['content-transfer-encoding'])
+
             mail_from = message['from']
 
             mail_subject = message['subject']
+            
+            mail_date = message['date']
 
+            mail_attachment = message['attachment']
 
 
             # then for the text we have a little more work to do
@@ -136,11 +144,30 @@ for i in mail_ids:
                 mail_content = message.get_payload()
 
 
-
             # and then let's show its result
 
-            print(f'From: {mail_from}')
+            # print(f'From: {mail_from}')
 
-            print(f'Subject: {mail_subject}')
+            # print(f'Subject: {mail_subject}')
 
-            print(f'Content: {mail_content}')
+            # print(f'Date: {mail_date}')
+            # print(f'ShortDate: {mail_date[5:25]}')
+            # print(f'DateType: {type(mail_date)}')
+
+            # print(f'Attachment: {mail_attachment}')
+
+            content = mail_content
+            # print(f'Content: {mail_content}')
+            if (message['content-transfer-encoding'] == None): #only decode when there is base64 encoding... in case of google mail, the encoding isn't given/kept as None
+                decoded_content = base64.b64decode(mail_content)
+                print(f'Decoded: {decoded_content}')
+                content = decoded_content
+            else:
+                print(f'Content: {mail_content}')
+
+            #save email in database
+            # conn = sqlite3.connect('database.db')
+            # cur = conn.cursor()
+            # cur.execute("INSERT INTO messages (title, content) VALUES (?, ?)", (mail_subject, content))
+            # conn.commit()
+            # conn.close()
