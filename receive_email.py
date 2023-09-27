@@ -4,6 +4,7 @@ import email
 import imaplib
 import base64
 import sqlite3
+import datetime
 
 EMAIL = 'prakss23@gmail.com'
 PASSWORD = 'flbycwtypcqgszjd'
@@ -15,28 +16,24 @@ mail = imaplib.IMAP4_SSL(SERVER)
 
 mail.login(EMAIL, PASSWORD)
 
-# we choose the inbox but you can select others
+# selection of where mail is read from
 
 mail.select('inbox')
 
 # we'll search using the ALL criteria to retrieve
-
 # every message inside the inbox
-
 # it will return with its status and a list of ids
-
-status, data = mail.search(None, 'ALL')
+recent_date = "1-Jun-2023"
+status, data = mail.search(None, "SENTSINCE "+recent_date)
+# status, data = mail.search(None, 'ALL') #can be used for matching TODO
 
 # the list returned is a list of bytes separated
-
 # by white spaces on this format: [b'1 2 3', b'4 5 6']
-
 # so, to separate it first we create an empty list
 
 mail_ids = []
 
 # then we go through the list splitting its blocks
-
 # of bytes and appending to the mail_ids list
 
 for block in data:
@@ -48,8 +45,12 @@ for block in data:
     # as separator the white spaces:
 
     # b'1 2 3'.split() => [b'1', b'2', b'3']
-
     mail_ids += block.split()
+    print("Current Mail IDs: ")
+    print(mail_ids, type(mail_ids))
+    # i = mail_ids.index(b'6',0,len(mail_ids))
+    # print(mail_ids[i:]) #pass last id to indexing operation -> cut off from last id
+    # mail_ids = mail_ids[i:]
 
 
 
@@ -94,7 +95,7 @@ for i in mail_ids:
             # who sent the message and its subject
 
             print('Details, Message:')
-            # print(message['content-transfer-encoding'])
+            # print(message)
 
             mail_from = message['from']
 
@@ -144,17 +145,19 @@ for i in mail_ids:
                 mail_content = message.get_payload()
 
 
+            # no match possible
+            no_match = True
             # and then let's show its result
 
-            # print(f'From: {mail_from}')
+            print(f'From: {mail_from}')
 
-            # print(f'Subject: {mail_subject}')
+            print(f'Subject: {mail_subject}')
 
-            # print(f'Date: {mail_date}')
-            # print(f'ShortDate: {mail_date[5:25]}')
-            # print(f'DateType: {type(mail_date)}')
+            print(f'Date: {mail_date}')
+            print(f'Converted Date: {mail_date[5:25].replace(" ", "-")}')
+            print(f'DateType: {type(mail_date)}')
 
-            # print(f'Attachment: {mail_attachment}')
+            print(f'Attachment: {mail_attachment}')
 
             content = mail_content
             # print(f'Content: {mail_content}')
@@ -165,9 +168,15 @@ for i in mail_ids:
             else:
                 print(f'Content: {mail_content}')
 
-            #save email in database
+            #save email in database only if email not matched + not in db already
+            # if(no_match):
             # conn = sqlite3.connect('database.db')
             # cur = conn.cursor()
             # cur.execute("INSERT INTO messages (title, content) VALUES (?, ?)", (mail_subject, content))
             # conn.commit()
             # conn.close()
+# def start(EMAIL, PASSWORD,SERVER):
+#     mail = imaplib.IMAP4_SSL(SERVER)
+#     mail.login(EMAIL, PASSWORD)
+#     mail.select('inbox')
+#     status, data = mail.search(None, 'SENTSINCE'+recent_date)
