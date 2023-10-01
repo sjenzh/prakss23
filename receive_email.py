@@ -24,8 +24,8 @@ mail.login(EMAIL, PASSWORD)
 mail.select('inbox')
 
 # search criteria keywords and what params it expects: https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4 
-recent_date = "1-Aug-2023"
-status, data = mail.search(None, "SENTSINCE "+recent_date)
+recent_date = "1-Jul-2023"
+status, data = mail.search(None, "SENTBEFORE "+recent_date)
 # status, data = mail.search(None, 'ALL') #can be used for matching TODO
 
 # the list returned is a list of bytes separated
@@ -157,6 +157,7 @@ for i in mail_ids:
             print(f'E-mail has attachments: {mail_has_attachment}')
             print(f'Number of attachments: {num_of_attachment}')
             print(f'Attachment names:{ATTACHMENTS}')
+            ATTACHMENTS = [] #reset bc this is a for loop
             
 
             content = mail_content
@@ -168,6 +169,7 @@ for i in mail_ids:
             else:
                 print(f'Content: {mail_content}')
 
+            ENCODING = None #reset encoding
             #save email in database only if email not matched + not in db already
             # if(no_match):
             # conn = sqlite3.connect('database.db')
