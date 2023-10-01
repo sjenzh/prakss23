@@ -10,6 +10,8 @@ import datetime
 
 #TODO encoding
 ENCODING = None
+#TODO attachment names
+ATTACHMENTS = []
 
 #email python lib covers: RFC5322, RFC6532, RFC2045,RFC2046,RFC2047,RFC2183,RFC2231
 EMAIL = 'prakss23@gmail.com'
@@ -22,7 +24,7 @@ mail.login(EMAIL, PASSWORD)
 mail.select('inbox')
 
 # search criteria keywords and what params it expects: https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4 
-recent_date = "1-Sep-2023"
+recent_date = "1-Aug-2023"
 status, data = mail.search(None, "SENTSINCE "+recent_date)
 # status, data = mail.search(None, 'ALL') #can be used for matching TODO
 
@@ -103,7 +105,8 @@ for i in mail_ids:
             for x in message.iter_attachments():
                 print('full',x)
                 print('content-disposition', x['content-disposition'])
-                print(x.get_filename()) #fetches fileName/attachmentName TODO: return as list and append to previous filenames, TODO: check for inline distinction
+                print(x.get_filename()) #fetches fileName/attachmentName TODO: check for inline distinction
+                ATTACHMENTS.append(x.get_filename()) #append to previous filenames, return as a list
                 print('get_content_disposition()', x.get_content_disposition())
                 print('content-transfer-encoding', x['content-transfer-encoding'])
                 ENCODING = x['content-transfer-encoding'] if x['content-transfer-encoding'] != None else None
@@ -153,6 +156,7 @@ for i in mail_ids:
             print(f'DateType: {type(mail_date)}')
             print(f'E-mail has attachments: {mail_has_attachment}')
             print(f'Number of attachments: {num_of_attachment}')
+            print(f'Attachment names:{ATTACHMENTS}')
             
 
             content = mail_content
