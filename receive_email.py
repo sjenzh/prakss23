@@ -2,14 +2,10 @@
 #https://humberto.io/blog/sending-and-receiving-emails-with-python/
 import email #python email package https://docs.python.org/3.8/library/email.html
 from email import policy
-from email import headerregistry
 import imaplib
-import base64
 import sqlite3
 import datetime
 
-#TODO encoding
-ENCODING = None
 #TODO attachment names
 ATTACHMENTS = []
 
@@ -23,9 +19,9 @@ mail = imaplib.IMAP4_SSL(SERVER)
 mail.login(EMAIL, PASSWORD)
 mail.select('inbox')
 
-# search criteria keywords and what params it expects: https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4 
-recent_date = "1-Jul-2023"
-status, data = mail.search(None, "SENTBEFORE "+recent_date)
+# search criteria  keywords and what params it expects: https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4 
+recent_date = "01-Jun-2023"
+status, data = mail.search(None, "SENTSINCE "+recent_date)
 # status, data = mail.search(None, 'ALL') #can be used for matching TODO
 
 # the list returned is a list of bytes separated
@@ -81,7 +77,7 @@ for i in mail_ids:
 
             # information extraction using parsed content
             print('Details, Message:',type(message))
-            print(message)
+            # print(message)
 
             # print('get_unixfrom()', message.getunixfrom()) # only possible with email.message, not email.message.EmailMessage
             print('is_multipart()', message.is_multipart())
@@ -109,7 +105,6 @@ for i in mail_ids:
                 ATTACHMENTS.append(x.get_filename()) #append to previous filenames, return as a list
                 print('get_content_disposition()', x.get_content_disposition())
                 print('content-transfer-encoding', x['content-transfer-encoding'])
-                ENCODING = x['content-transfer-encoding'] if x['content-transfer-encoding'] != None else None
             mail_from = message['from']
             mail_subject = message['subject']
             mail_date = message['date']
@@ -128,15 +123,14 @@ for i in mail_ids:
                 # of the message, in that case we loop through
                 # the email payload
 
-                for part in message.get_payload():
+                for part in message.iter_parts():
 
-                    # if the content type is text/plain
-
+                    # if the content type is text/plain #TODO what other content types are there to consider?
                     # we extract it
 
                     if part.get_content_type() == 'text/plain':
-
-                        mail_content += part.get_payload()
+                        # print('in part, receive content-transfer-encoding: ', part['content-transfer-encoding'])
+                        mail_content += part.get_content()
 
             else:
 
@@ -158,18 +152,8 @@ for i in mail_ids:
             print(f'Number of attachments: {num_of_attachment}')
             print(f'Attachment names:{ATTACHMENTS}')
             ATTACHMENTS = [] #reset bc this is a for loop
-            
+            print(f'Content: {mail_content}')
 
-            content = mail_content
-            # only decode when base64 encoding, datatype: https://docs.python.org/3/library/email.headerregistry.html
-            if (ENCODING.cte == 'base64' if isinstance(ENCODING,headerregistry.ContentTransferEncodingHeader) else False):
-                decoded_content = base64.b64decode(mail_content).decode('utf-8')
-                print(f'Decoded Content: {decoded_content}')
-                content = decoded_content
-            else:
-                print(f'Content: {mail_content}')
-
-            ENCODING = None #reset encoding
             #save email in database only if email not matched + not in db already
             # if(no_match):
             # conn = sqlite3.connect('database.db')
