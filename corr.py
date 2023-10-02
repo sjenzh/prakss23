@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import os, time, requests
 import sqlite3
+import json
+
 from pathlib import Path
 from threading import Thread
 
@@ -31,18 +33,32 @@ def check(cb,params):
   #   database.rules.alsoadd cb
   print(cb)
   print(params)
-
+  print(params.keys())
+  print(params.items())
+  print(type(params.items()))
+  for x in params.items():
+      print(x, type(x))
+  json_dict = { x[0] : x[1] for x in params.items()}
+  print(json_dict, type(json_dict)) #json_dict is a dict
+  dump = json.dumps(json_dict)
+  print(dump, type(dump)) #dump = str
+  fin = json.JSONEncoder().encode(json_dict)
+  print(fin, type(fin)) #fin is a str
+  requests.put(cb,data=json_dict)
+  
 @route('/test')
 def fetch_info():
    return template("Test result: {{result}}", result=request)
 
 @route('/get_matching_message')
 def index():
-    response.content_type = "text/plain; charset=UTF-8"
-    response.headers["CPEE-CALLBACK"] = "true"
+    response.headers.content_type =  'text/plain; charset=UTF-8'
+    response.headers['CPEE-CALLBACK'] = 'true'
+    response.status = 200
+    response.body = ''
     thread = Thread(target=check, args=[request.headers['Cpee-Callback'],request.params])
     thread.start()
-    return ""
+    return response
 
 port = int(os.environ.get('PORT', 20147))
 run(host='::1', port=port, debug=True)
