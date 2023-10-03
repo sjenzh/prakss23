@@ -44,7 +44,7 @@ def check(cb,params):
   print(dump, type(dump)) #dump = str
   fin = json.JSONEncoder().encode(json_dict)
   print(fin, type(fin)) #fin is a str
-  requests.put(cb,data=json_dict)
+  requests.put(cb,data=dump, headers={'content-type': 'application/json'})
   
 @route('/test')
 def fetch_info():
