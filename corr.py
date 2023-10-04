@@ -65,6 +65,17 @@ def check(cb,params):
   print(stmt)
   sql = "SELECT id FROM messages WHERE "+stmt
   print(sql)
+  conn = sqlite3.connect('database.db')
+  conn.enable_load_extension(True)
+  c = conn.cursor()
+  c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
+  c.execute(sql)
+  res = c.fetchall
+  c.close()
+  print(res)
+  for x in res:
+      print(x)  
+  #dummy request/immediate sendback instead of checking whether it is valid or no
   json_dict = json.dumps({ x[0] : x[1] for x in params.items()})
   print(json_dict, type(json_dict))
   requests.put(cb,data=json_dict, headers={'content-type': 'application/json'})
