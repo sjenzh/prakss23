@@ -76,11 +76,30 @@ def check(cb,params):
   res = c.fetchall()
   c.close()
   if len(res) == 0:
+      save_rule_stmt = 'INSERT INTO'
       print('No matches found, TODO: add rule to database')
   else:
-      print('res:', res)
-      print('Match found, pick first and send it back to the callback TODO')
-  #dummy request/immediate sendback instead of checking whether it is valid or no
+      print('res:', res, min(res))
+      matched_email_stmt = 'SELECT * FROM messages WHERE id = ?'
+      conn = sqlite3.connect('database.db')
+      c = conn.cursor()
+      c.execute(matched_email_stmt, min(res))
+      res = c.fetchone()
+      c.close()
+      print('Match found:', res)
+      print('res removing id', res[2:]) #removes the id and the created date
+      res_dict_vals = list(res[2:])
+      res_dict_keys = ['date','subject','sender','content', 'has_attachment']
+      dict_result = {}
+      for k in res_dict_keys:
+          for v in res_dict_vals:
+              dict_result[k] = v
+              res_dict_vals.remove(v)
+              break
+      print(dict_result)
+      dict_result = json.dumps(dict_result)
+      #requests.put(cb,data=json.dumps(dict_result), headers={'content-type': 'application/json'})
+  #dummy request/immediate sendback instead of checking whether it is valid or n
   json_dict = json.dumps({ x[0] : x[1] for x in params.items()})
   print(json_dict, type(json_dict))
   requests.put(cb,data=json_dict, headers={'content-type': 'application/json'})
