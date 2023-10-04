@@ -48,6 +48,7 @@ def check(cb,params):
   print(cb)
   print(params)
   stmt = ""
+  stmt_params = []
   print(params.keys())
   print(params.items())
   print(type(params.items()))
@@ -57,24 +58,28 @@ def check(cb,params):
           if((k=='subject') or (k=='content') or (k=='sender')):#regex
               stmt = stmt+k+" REGEXP \""+v+"\" AND "
           elif((k=='before')): #datetime 
-              stmt = stmt+"received_date < "+datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc).isoformat()+" AND "
+              stmt = stmt+"received_date < ?"+" AND "
+              stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
           elif((k=='after')): #datetime
-              stmt = stmt+"received_date > "+datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc).isoformat()+" AND "
+              stmt = stmt+"received_date > ?"+" AND "
+              stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
   if len(stmt)>1:
-      stmt=stmt[:-5] #removes last AND
+      stmt = stmt[:-5] #removes last AND
   print(stmt)
   sql = "SELECT id FROM messages WHERE "+stmt
-  print(sql)
+  print(sql, stmt_params)
   conn = sqlite3.connect('database.db')
   conn.enable_load_extension(True)
   c = conn.cursor()
   c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
-  c.execute(sql)
-  res = c.fetchall
+  c.execute(sql, stmt_params)
+  res = c.fetchall()
   c.close()
-  print(res)
-  for x in res:
-      print(x)  
+  if len(res) == 0:
+      print('No matches found, TODO: add rule to database')
+  else:
+      print('res:', res)
+      print('Match found, pick first and send it back to the callback TODO')
   #dummy request/immediate sendback instead of checking whether it is valid or no
   json_dict = json.dumps({ x[0] : x[1] for x in params.items()})
   print(json_dict, type(json_dict))
