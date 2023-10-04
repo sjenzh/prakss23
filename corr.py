@@ -2,6 +2,7 @@
 import os, time, requests
 import sqlite3
 import json
+import datetime
 
 from pathlib import Path
 from threading import Thread
@@ -14,8 +15,10 @@ TEMPLATE_PATH.append(str(Path('prakss23')/ 'views'))
 @route('/')
 def index():
    conn = sqlite3.connect('database.db')
+   conn.enable_load_extension(True)
    c = conn.cursor()
-   c.execute('SELECT subject FROM rules')
+   c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
+   c.execute('SELECT subject FROM rules WHERE id REGEXP "\d"')
    rules_res = c.fetchall()
    c.execute('SELECT subject FROM messages')
    messages_res = c.fetchall()
@@ -33,18 +36,27 @@ def check(cb,params):
   #   database.rules.alsoadd cb
   print(cb)
   print(params)
+  stmt = ""
   print(params.keys())
   print(params.items())
   print(type(params.items()))
-  for x in params.items():
-      print(x, type(x))
-  json_dict = { x[0] : x[1] for x in params.items()}
-  print(json_dict, type(json_dict)) #json_dict is a dict
-  dump = json.dumps(json_dict)
-  print(dump, type(dump)) #dump = str
-  fin = json.JSONEncoder().encode(json_dict)
-  print(fin, type(fin)) #fin is a str
-  requests.put(cb,data=dump, headers={'content-type': 'application/json'})
+  for (k,v) in params.items():
+      print(k, type(k),v, type(v))
+      if len(v) != 0: #field is not empty
+          if((k=='subject') or (k=='content') or (k=='sender')):#regex
+              stmt = stmt+k+" REGEXP \""+v+"\" AND "
+          elif((k=='before')): #datetime 
+              stmt = stmt+"received_date < "+datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc).isoformat()+" AND "
+          elif((k=='after')): #datetime
+              stmt = stmt+"received_date > "+datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc).isoformat()+" AND "
+  if len(stmt)>1:
+      stmt=stmt[:-5] #removes last AND
+  print(stmt)
+  sql = "SELECT id FROM messages WHERE "+stmt
+  print(sql)
+  json_dict = json.dumps({ x[0] : x[1] for x in params.items()})
+  print(json_dict, type(json_dict))
+  requests.put(cb,data=json_dict, headers={'content-type': 'application/json'})
   
 @route('/test')
 def fetch_info():
