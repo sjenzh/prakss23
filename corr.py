@@ -49,12 +49,14 @@ def check(cb,params):
   print(params)
   stmt = ""
   stmt_params = []
-  print(params.keys())
-  print(params.items())
-  print(type(params.items()))
+  rule_columns = []
+  #print(params.keys())
+  #print(params.items())
+  #print(type(params.items()))
   for (k,v) in params.items():
       print(k, type(k),v, type(v))
       if len(v) != 0: #field is not empty
+          rule_columns.append(k)
           if((k=='subject') or (k=='content') or (k=='sender')):#regex
               stmt = stmt+k+" REGEXP \""+v+"\" AND "
           elif((k=='before')): #datetime 
@@ -76,7 +78,24 @@ def check(cb,params):
   res = c.fetchall()
   c.close()
   if len(res) == 0:
-      save_rule_stmt = 'INSERT INTO'
+      rule_columns.append('callback')
+      rule_values = list(params.values())
+      rule_values.append(cb)
+      rule_values = [x for x in rule_values if x != ""]
+      for x in rule_columns:
+          if x == 'after':
+              rule_columns[rule_columns.index(x)] = 'date_after'
+          elif x == 'before':
+              rule_columns[rule_columns.index(x)] = 'date_before'
+      placeholders = ', '.join(['?'] * len(rule_values))
+      print(rule_columns, rule_values)
+      insert_into_stmt = f'INSERT INTO rules ({", ".join(rule_columns)}) VALUES ({placeholders})'
+      print(insert_into_stmt)
+      conn = sqlite3.connect('database.db')
+      c = conn.cursor()
+      c.execute(insert_into_stmt, rule_values)
+      conn.commit()
+      conn.close()
       print('No matches found, TODO: add rule to database')
   else:
       print('res:', res, min(res))
