@@ -27,8 +27,8 @@ def index():
   #  parsed_date = parser.parse('2023-10-03T15:16:33+0000')
   #  print(type(parsed_date))
    #localizing timezones
-  #  c.execute('SELECT received_date FROM messages WHERE received_date > ?', (datetime.datetime.fromisoformat('2023-10-03 17:16:33+01:00').astimezone(datetime.timezone.utc),))
-  #  messages_res = c.fetchall()
+   c.execute('SELECT received_date FROM messages WHERE received_date > ?', (datetime.datetime.fromisoformat('2023-10-03 17:16:33+01:00').astimezone(datetime.timezone.utc),))
+   messages_res = c.fetchall()
   #  for x in messages_res:
   #     print(x,type(x))
   #     if type(x) is tuple:
