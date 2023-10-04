@@ -2,6 +2,7 @@
 #https://humberto.io/blog/sending-and-receiving-emails-with-python/
 import email #python email package https://docs.python.org/3.8/library/email.html
 from email import policy
+import datetime
 import imaplib
 import sqlite3
 import datetime
@@ -13,6 +14,12 @@ ATTACHMENTS = []
 EMAIL = 'prakss23@gmail.com'
 PASSWORD = 'flbycwtypcqgszjd'
 SERVER = 'imap.gmail.com'
+
+def check(params): #TODO
+   # checks if inc. e-mail fits any of the rules in the database.
+   # fetch the database entries for rules.
+   # is check executed for all e-mails on call or just the current incoming emails?
+   return '' # send a request or save all entries if not
 
 # server connection, inbox selection
 mail = imaplib.IMAP4_SSL(SERVER)
@@ -146,8 +153,10 @@ for i in mail_ids:
             print(f'From: {mail_from}')
             print(f'Subject: {mail_subject}')
             print(f'Date: {mail_date}')
-            print(f'Converted Date: {mail_date[5:25].replace(" ", "-")}')
-            print(f'DateType: {type(mail_date)}')
+            print(f'DateTimeDate: {mail_date.datetime}')
+            print(f'iso8601-format: {datetime.datetime.fromisoformat(str(mail_date.datetime))}')
+            print(f'isoformatunified timezone:', mail_date.datetime.astimezone(datetime.timezone.utc).isoformat())
+            print('localized time:', '2023-10-03T17:16:33+00:00'< mail_date.datetime.astimezone(datetime.timezone.utc).isoformat())
             print(f'E-mail has attachments: {mail_has_attachment}')
             print(f'Number of attachments: {num_of_attachment}')
             print(f'Attachment names:{ATTACHMENTS}')

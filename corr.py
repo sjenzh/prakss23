@@ -1,5 +1,7 @@
 #!/usr/bin/python3
-import os, time, requests
+import os, requests
+import datetime
+from dateutil import parser
 import sqlite3
 import json
 import datetime
@@ -20,8 +22,17 @@ def index():
    c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
    c.execute('SELECT subject FROM rules WHERE id REGEXP "\d"')
    rules_res = c.fetchall()
-   c.execute('SELECT subject FROM messages')
-   messages_res = c.fetchall()
+  #  print('2023-10-03T15:16:33+0000')
+  #  print(parser.parse('2023-10-03T15:16:33+0000'))
+  #  parsed_date = parser.parse('2023-10-03T15:16:33+0000')
+  #  print(type(parsed_date))
+   #localizing timezones
+  #  c.execute('SELECT received_date FROM messages WHERE received_date > ?', (datetime.datetime.fromisoformat('2023-10-03 17:16:33+01:00').astimezone(datetime.timezone.utc),))
+  #  messages_res = c.fetchall()
+  #  for x in messages_res:
+  #     print(x,type(x))
+  #     if type(x) is tuple:
+  #        print(x[0], type(x[0]))
    c.close()
    output = template('make_queues', {'rules':rules_res, 'messages':messages_res})
    return output
