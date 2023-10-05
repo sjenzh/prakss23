@@ -1,177 +1,185 @@
-#receiving e-mail app: to receive them, we use IMAP (RFC 3501) or POP (RFCs 918 e 1081) protocols.
 #https://humberto.io/blog/sending-and-receiving-emails-with-python/
-import email #python email package https://docs.python.org/3.8/library/email.html
+import email
 from email import policy
-import datetime
-import imaplib
-import sqlite3
-import datetime
+import datetime, imaplib, sqlite3, re, requests, json
+import calendar
 
-#TODO attachment names
-ATTACHMENTS = []
-
-#email python lib covers: RFC5322, RFC6532, RFC2045,RFC2046,RFC2047,RFC2183,RFC2231
 EMAIL = 'prakss23@gmail.com'
 PASSWORD = 'flbycwtypcqgszjd'
 SERVER = 'imap.gmail.com'
 
-def check(params): #TODO
-   # checks if inc. e-mail fits any of the rules in the database.
-   # fetch the database entries for rules.
-   # is check executed for all e-mails on call or just the current incoming emails?
-   return '' # send a request or save all entries if not
+def drules(params, target, cur):
+    res_ids = []
+    cur.execute('SELECT id, '+ target + ' FROM rules')
+    date_res = cur.fetchall()
+    res_ids.append([])
+    for id, date in date_res:
+        if date == None:
+            res_ids.append(id)
+        elif target == 'date_after' and params['date'] > date:
+            res_ids.append(id)
+            print('paramsdate', type(params['date']), 'date', type(date))
+        elif target == 'date_before' and params['date'] < date:
+            print('paramsdate', type(params['date']), 'date', type(date))
+            res_ids.append(id)
+    return res_ids
 
-# server connection, inbox selection
+def crules(params,target, cur):
+    res_ids = []
+    cur.execute('SELECT id, ' + target + ' FROM rules')
+    regex_results = cur.fetchall()
+    res_ids.append([])
+    for id, pattern in regex_results:
+        if re.search(pattern, params[target]) or pattern == None:
+              res_ids.append(id)
+    return res_ids
+
+
+def check(params):
+    # checks if inc. e-mail fits any of the rules in the database.
+    # if null, it automatically applies
+    date_after_stmt = 'SELECT id, subject, sender, content FROM rules WHERE date_after < ? AND date_after IS NOT NULL'
+    date_after_none_stmt = 'SELECT id FROM rules WHERE date_after IS NULL'
+    date_after_union_stmt = date_after_stmt + ' UNION ' + date_after_none_stmt
+    date_before_stmt = 'SELECT id, subject, sender, content FROM rules WHERE date_before > ? AND date_before IS NOT NULL'
+    date_before_none_stmt = 'SELECT id FROM rules WHERE date_before IS NULL'
+    date_before_union_stmt = date_before_stmt + ' UNION ' + date_before_none_stmt
+    regex_stmt = 'SELECT A.id, A.subject, A.sender, A.content FROM ('+date_after_union_stmt + ') AS A INNER JOIN (' + date_before_union_stmt + ') AS B ON A.id = B.id'
+
+    # TODO rewrite everything
+    # date_sql_stmt = 'SELECT id FROM rules WHERE date_after < ? AND date_before > ? UNION SELECT id from rules WHERE date_after IS NULL OR WHERE date_before IS NULL'
+    conn = sqlite3.connect('database.db')
+    cur = conn.cursor()
+    # cur.execute(date_after_stmt, params['date'])
+    res_ids = []
+
+    res_ids.append(drules(params,'date_after', cur))
+    res_ids.append(drules(params,'date_before', cur))
+    res_ids.append(crules(params,'subject', cur))
+    res_ids.append(crules(params,'content', cur))
+    res_ids.append(crules(params,'sender', cur))
+    intersec = list(set(res_ids[0]) & set(res_ids[1]) & set(res_ids[2]) & set(res_ids[3]) & set(res_ids[4]))
+
+    if len(intersec) > 0:
+      id = intersec[0]
+
+    # if re.search(subject_pattern, params['subject']) or subject_pattern == None:
+    #     print(f"Pattern '{subject_pattern}' matches the target string.")
+    #     if re.search(sender_pattern, params['sender']) or sender_pattern == None:
+    #         print(f"Pattern '{sender_pattern}' matches the target string.")
+    #         if re.search(content_pattern, params['content']) or content_pattern == None:
+    #             res_ids.append(id)
+    #             print(f"Pattern '{content_pattern}' matches the target string.")
+
+
+    cur.execute(regex_stmt)
+    regex_results = cur.fetchall()
+
+    #Regex match
+    for id, subject_pattern, sender_pattern, content_pattern in regex_results:
+        if re.search(subject_pattern, params['subject']) or subject_pattern == None:
+            print(f"Pattern '{subject_pattern}' matches the target string.")
+            if re.search(sender_pattern, params['sender']) or sender_pattern == None:
+                print(f"Pattern '{sender_pattern}' matches the target string.")
+                if re.search(content_pattern, params['content']) or content_pattern == None:
+                    res_ids.append(id)
+                    print(f"Pattern '{content_pattern}' matches the target string.")
+    
+    conn.close()
+    #TODO: TESTING minimize if available, return nothing if there is none
+    if len(res_ids) >0:
+        resulting_id = min(res_ids)
+        #TEST select statement using resulting_id and using the callback to perform a PUT request
+        conn = sqlite3.connect('database.db')
+        c = conn.cursor()
+        c.execute('SELECT callback FROM rules WHERE id = ?', resulting_id)
+        cb_res = c.fetchone()
+        c.close()
+        dict_result = {}
+        dict_result['received_date'] = params['date']
+        dict_result['subject'] = params['subject']
+        dict_result['sender'] = params['sender']
+        dict_result['content'] = params['content']
+        dict_result['has_attachment'] = params['has_attachment']
+        dict_result = json.dumps(dict_result)
+        requests.put(cb_res,data=dict_result, headers={'content-type': 'application/json'})
+        #TODO remove e-mail and rule from database
+    else:
+        #TEST no match: e-mail needs to be saved into the DB
+        print('No match found, inserting e-mail into database')
+        conn = sqlite3.connect('database.db')
+        c = conn.cursor()
+        c.execute('INSERT INTO messages (received_date, subject, sender, content, has_attachment, mail_id) VALUES (?,?,?,?,?,?)', 
+                  (params['date'], params['subject'], params['sender'], params['content'], params['has_attachment'], params['mail_id']))
+        conn.commit()
+        conn.close()
+
+def convert_date(date):
+    res= date[8:10]+'-'+calendar.month_name[int(date[5:7])][:3]+'-'+date[0:4]
+    return res
+
 mail = imaplib.IMAP4_SSL(SERVER)
 mail.login(EMAIL, PASSWORD)
 mail.select('inbox')
 
-# search criteria  keywords and what params it expects: https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4 
-recent_date = "01-Jun-2023"
-status, data = mail.search(None, "SENTSINCE "+recent_date)
-# status, data = mail.search(None, 'ALL') #can be used for matching TODO
-
-# the list returned is a list of bytes separated
-# by white spaces on this format: [b'1 2 3', b'4 5 6']
-# so, to separate it first we create an empty list
+conn = sqlite3.connect('database.db')
+c = conn.cursor()
+c.execute('SELECT received_date, mail_id FROM messages WHERE id = (SELECT MAX(id) FROM messages)')
+date_id = c.fetchone()
+conn.close()
+if date_id == None:
+    status, data = mail.search(None, 'ALL')
+else:
+    result = convert_date(date_id[0])
+    status, data = mail.search(None, 'SENTSINCE '+result)
 
 mail_ids = []
 
-# then we go through the list splitting its blocks
-# of bytes and appending to the mail_ids list
-
 for block in data:
-
-    # the split function called without parameter
-    # transforms the text or bytes into a list using
-    # as separator the white spaces:
-
     # b'1 2 3'.split() => [b'1', b'2', b'3']
     mail_ids += block.split()
     print("Current Mail IDs: ")
     print(mail_ids, type(mail_ids))
-    # i = mail_ids.index(b'6',0,len(mail_ids))
-    # print(mail_ids[i:]) #pass last id to indexing operation -> cut off from last id TODO: filtering
-    # mail_ids = mail_ids[i:]
+    if date_id != None: 
+       i = mail_ids.index(bytes(date_id[1]),0,len(mail_ids))
+       if i+1 >= len(mail_ids):
+            break #stop when there are no new e-mails
+       else:
+            print(mail_ids[i:]) #pass last id to indexing operation -> cut off from last id TODO: filtering   
+            mail_ids = mail_ids[(i+1):]
 
-
-# now for every id we'll fetch the email to extract its content
-
-for i in mail_ids:
-
-    # the fetch function fetch the email given its id
-    # and format that you want the message to be
-
-    status, data = mail.fetch(i, '(RFC822)')
-
-    # the content data at the '(RFC822)' format comes on
-    # a list with a tuple with header, content, and the closing byte b')'
-
+for id in mail_ids:
+    status, data = mail.fetch(id, '(RFC822)')
     for response_part in data:
-
-        # so if its a tuple...
-
         if isinstance(response_part, tuple):
-
-            # we go for the content at its second element
-            # skipping the header at the first and the closing
-            # at the third
-
-            # message_from_bytes with no specific policy defaults to https://docs.python.org/3/library/email.policy.html#email.policy.Compat32,
-            # limiting the amount of retrieval methods. Now converted to EmailMessage object.
-            # select & specify policy here: https://docs.python.org/3.8/library/email.policy.html
             message = email.message_from_bytes(response_part[1], policy=policy.HTTP)
-
-            # information extraction using parsed content
-            print('Details, Message:',type(message))
-            # print(message)
-
-            # print('get_unixfrom()', message.getunixfrom()) # only possible with email.message, not email.message.EmailMessage
-            print('is_multipart()', message.is_multipart())
-            # print('len', len(message))
-            # print('keys()', message.keys())
-            # print('values()', message.values())
-            # print('items()', message.items())
-            # print('is_attachemnt()', message.is_attachment())
-            # print('get_content_disposition()', message.get_content_disposition())
-            # print('contains?')
-            # print('walk() and printing is_attachment()')
-            # for part in message.walk():
-            #     print(part.get_content_type(), part.is_attachment(), part.get_content_disposition if part.is_attachment() else "None")
-            
-            #TODO prelim email decoding method; see https://stackoverflow.com/questions/27037816/can-an-email-header-have-different-character-encoding-than-the-body-of-the-email
-
             mail_has_attachment = any(True for _ in message.iter_attachments())
-            num_of_attachment = sum(1 for _ in message.iter_attachments()) if mail_has_attachment else 0
-
-            # print('iter_attachments()', message.iter_attachments()) <- similar for inline possible?
-            for x in message.iter_attachments():
-                print('full',x)
-                print('content-disposition', x['content-disposition'])
-                print(x.get_filename()) #fetches fileName/attachmentName TODO: check for inline distinction
-                ATTACHMENTS.append(x.get_filename()) #append to previous filenames, return as a list
-                print('get_content_disposition()', x.get_content_disposition())
-                print('content-transfer-encoding', x['content-transfer-encoding'])
+            # num_of_attachment = sum(1 for _ in message.iter_attachments()) if mail_has_attachment else 0
             mail_from = message['from']
             mail_subject = message['subject']
             mail_date = message['date']
 
-            # then for the text we have a little more work to do
-            # because it can be in plain text or multipart
-            # if its not plain text we need to separate the message
-            # from its annexes to get the text
-
             if message.is_multipart():
-
                 mail_content = ''
-
-                # on multipart we have the text message and
-                # another things like annex, and html version
-                # of the message, in that case we loop through
-                # the email payload
-
                 for part in message.iter_parts():
-
-                    # if the content type is text/plain #TODO what other content types are there to consider?
-                    # we extract it
-
                     if part.get_content_type() == 'text/plain':
-                        # print('in part, receive content-transfer-encoding: ', part['content-transfer-encoding'])
                         mail_content += part.get_content()
-
             else:
-
-                # if the message isn't multipart, just extract it
-
                 mail_content = message.get_payload()
 
-
-            # no match possible
-            no_match = True
-            # and then let's show its result
-
-            print(f'From: {mail_from}')
-            print(f'Subject: {mail_subject}')
-            print(f'Date: {mail_date}')
-            print(f'DateTimeDate: {mail_date.datetime}')
-            print(f'iso8601-format: {datetime.datetime.fromisoformat(str(mail_date.datetime))}')
-            print(f'isoformatunified timezone:', mail_date.datetime.astimezone(datetime.timezone.utc).isoformat())
-            print('localized time:', '2023-10-03T17:16:33+00:00'< mail_date.datetime.astimezone(datetime.timezone.utc).isoformat())
-            print(f'E-mail has attachments: {mail_has_attachment}')
-            print(f'Number of attachments: {num_of_attachment}')
-            print(f'Attachment names:{ATTACHMENTS}')
-            ATTACHMENTS = [] #reset bc this is a for loop
-            print(f'Content: {mail_content}')
-
-            #save email in database only if email not matched + not in db already
-            # if(no_match):
-            # conn = sqlite3.connect('database.db')
-            # cur = conn.cursor()
-            # cur.execute("INSERT INTO messages (title, content) VALUES (?, ?)", (mail_subject, content))
-            # conn.commit()
-            # conn.close()
-            # def start(EMAIL, PASSWORD,SERVER):
-            #     mail = imaplib.IMAP4_SSL(SERVER)
-            #     mail.login(EMAIL, PASSWORD)
-            #     mail.select('inbox')
-            #     status, data = mail.search(None, 'SENTSINCE'+recent_date)
+            params = {'date': mail_date.datetime.astimezone(datetime.timezone.utc).isoformat(),
+                      'sender': mail_from,
+                      'subject': mail_subject, 
+                      'content': mail_content, 
+                      'has_attachment': mail_has_attachment,
+                      'mail_id': id}
+            check(params)
+            # print(f'From: {mail_from}')
+            # print(f'Subject: {mail_subject}')
+            # print(f'Date: {mail_date}')
+            # print(f'DateTimeDate: {mail_date.datetime}')
+            # print(f'iso8601-format: {datetime.datetime.fromisoformat(str(mail_date.datetime))}')
+            # print(f'isoformatunified timezone:', mail_date.datetime.astimezone(datetime.timezone.utc).isoformat())
+            # print('localized time:', '2023-10-03T17:16:33+00:00'< mail_date.datetime.astimezone(datetime.timezone.utc).isoformat())
+            # print(f'E-mail has attachments: {mail_has_attachment}')
+            # print(f'Content: {mail_content}')
