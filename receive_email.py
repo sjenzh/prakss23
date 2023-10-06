@@ -12,39 +12,39 @@ def drules(params, target, cur):
     res_ids = []
     cur.execute('SELECT id, '+ target + ' FROM rules')
     date_res = cur.fetchall()
-    res_ids.append([])
     for id, date in date_res:
+        # print('date:', type(date),'params,date: ', type(params['date']))
         if date == None:
             res_ids.append(id)
         elif target == 'date_after' and params['date'] > date:
             res_ids.append(id)
-            print('paramsdate', type(params['date']), 'date', type(date))
+            # print('paramsdate', type(params['date']), 'date', type(date))
         elif target == 'date_before' and params['date'] < date:
-            print('paramsdate', type(params['date']), 'date', type(date))
+            # print('paramsdate', type(params['date']), 'date', type(date))
             res_ids.append(id)
+    # print('target: ', target, "result: ", res_ids)
     return res_ids
 
-def crules(params,target, cur):
+def crules(params, target, cur):
     res_ids = []
     cur.execute('SELECT id, ' + target + ' FROM rules')
     regex_results = cur.fetchall()
-    res_ids.append([])
     for id, pattern in regex_results:
-        if re.search(pattern, params[target]) or pattern == None:
+        if pattern == None or re.search(pattern, params[target]):
               res_ids.append(id)
+    # print('target: ', target, "result: ", res_ids)
     return res_ids
-
 
 def check(params):
     # checks if inc. e-mail fits any of the rules in the database.
     # if null, it automatically applies
-    date_after_stmt = 'SELECT id, subject, sender, content FROM rules WHERE date_after < ? AND date_after IS NOT NULL'
-    date_after_none_stmt = 'SELECT id FROM rules WHERE date_after IS NULL'
-    date_after_union_stmt = date_after_stmt + ' UNION ' + date_after_none_stmt
-    date_before_stmt = 'SELECT id, subject, sender, content FROM rules WHERE date_before > ? AND date_before IS NOT NULL'
-    date_before_none_stmt = 'SELECT id FROM rules WHERE date_before IS NULL'
-    date_before_union_stmt = date_before_stmt + ' UNION ' + date_before_none_stmt
-    regex_stmt = 'SELECT A.id, A.subject, A.sender, A.content FROM ('+date_after_union_stmt + ') AS A INNER JOIN (' + date_before_union_stmt + ') AS B ON A.id = B.id'
+    # date_after_stmt = 'SELECT id, subject, sender, content FROM rules WHERE date_after < ? AND date_after IS NOT NULL'
+    # date_after_none_stmt = 'SELECT id FROM rules WHERE date_after IS NULL'
+    # date_after_union_stmt = date_after_stmt + ' UNION ' + date_after_none_stmt
+    # date_before_stmt = 'SELECT id, subject, sender, content FROM rules WHERE date_before > ? AND date_before IS NOT NULL'
+    # date_before_none_stmt = 'SELECT id FROM rules WHERE date_before IS NULL'
+    # date_before_union_stmt = date_before_stmt + ' UNION ' + date_before_none_stmt
+    # regex_stmt = 'SELECT A.id, A.subject, A.sender, A.content FROM ('+date_after_union_stmt + ') AS A INNER JOIN (' + date_before_union_stmt + ') AS B ON A.id = B.id'
 
     # TODO rewrite everything
     # date_sql_stmt = 'SELECT id FROM rules WHERE date_after < ? AND date_before > ? UNION SELECT id from rules WHERE date_after IS NULL OR WHERE date_before IS NULL'
@@ -58,10 +58,12 @@ def check(params):
     res_ids.append(crules(params,'subject', cur))
     res_ids.append(crules(params,'content', cur))
     res_ids.append(crules(params,'sender', cur))
+    # print(type(res_ids), res_ids)
+    # print(type(res_ids[0]), res_ids[0], type(set(res_ids[0])))
     intersec = list(set(res_ids[0]) & set(res_ids[1]) & set(res_ids[2]) & set(res_ids[3]) & set(res_ids[4]))
 
-    if len(intersec) > 0:
-      id = intersec[0]
+    # if len(intersec) > 0:
+    #   id = min(intersec)
 
     # if re.search(subject_pattern, params['subject']) or subject_pattern == None:
     #     print(f"Pattern '{subject_pattern}' matches the target string.")
@@ -71,24 +73,24 @@ def check(params):
     #             res_ids.append(id)
     #             print(f"Pattern '{content_pattern}' matches the target string.")
 
-
-    cur.execute(regex_stmt)
-    regex_results = cur.fetchall()
+    # cur.execute(regex_stmt)
+    # regex_results = cur.fetchall()
 
     #Regex match
-    for id, subject_pattern, sender_pattern, content_pattern in regex_results:
-        if re.search(subject_pattern, params['subject']) or subject_pattern == None:
-            print(f"Pattern '{subject_pattern}' matches the target string.")
-            if re.search(sender_pattern, params['sender']) or sender_pattern == None:
-                print(f"Pattern '{sender_pattern}' matches the target string.")
-                if re.search(content_pattern, params['content']) or content_pattern == None:
-                    res_ids.append(id)
-                    print(f"Pattern '{content_pattern}' matches the target string.")
-    
+    # for id, subject_pattern, sender_pattern, content_pattern in regex_results:
+    #     if re.search(subject_pattern, params['subject']) or subject_pattern == None:
+    #         print(f"Pattern '{subject_pattern}' matches the target string.")
+    #         if re.search(sender_pattern, params['sender']) or sender_pattern == None:
+    #             print(f"Pattern '{sender_pattern}' matches the target string.")
+    #             if re.search(content_pattern, params['content']) or content_pattern == None:
+    #                 res_ids.append(id)
+    #                 print(f"Pattern '{content_pattern}' matches the target string.")
     conn.close()
     #TODO: TESTING minimize if available, return nothing if there is none
-    if len(res_ids) >0:
-        resulting_id = min(res_ids)
+    if len(intersec) > 0:
+    # if len(res_ids) >0:
+        resulting_id = min(intersec)
+        # resulting_id = min(res_ids)
         #TEST select statement using resulting_id and using the callback to perform a PUT request
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
@@ -143,6 +145,8 @@ for block in data:
     if date_id != None: 
        i = mail_ids.index(bytes(date_id[1]),0,len(mail_ids))
        if i+1 >= len(mail_ids):
+            print('no new emails')
+            mail_ids=[]
             break #stop when there are no new e-mails
        else:
             print(mail_ids[i:]) #pass last id to indexing operation -> cut off from last id TODO: filtering   
@@ -155,9 +159,9 @@ for id in mail_ids:
             message = email.message_from_bytes(response_part[1], policy=policy.HTTP)
             mail_has_attachment = any(True for _ in message.iter_attachments())
             # num_of_attachment = sum(1 for _ in message.iter_attachments()) if mail_has_attachment else 0
-            mail_from = message['from']
-            mail_subject = message['subject']
-            mail_date = message['date']
+            mail_from = message['from'].addresses[0].username +'@'+ message['from'].addresses[0].domain
+            mail_subject = str(message['subject'])
+            mail_date = datetime.datetime.fromisoformat(message['date'].datetime.astimezone(datetime.timezone.utc).isoformat())
 
             if message.is_multipart():
                 mail_content = ''
@@ -167,7 +171,7 @@ for id in mail_ids:
             else:
                 mail_content = message.get_payload()
 
-            params = {'date': mail_date.datetime.astimezone(datetime.timezone.utc).isoformat(),
+            params = {'date': mail_date,
                       'sender': mail_from,
                       'subject': mail_subject, 
                       'content': mail_content, 

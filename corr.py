@@ -122,10 +122,6 @@ def check(cb,params):
   json_dict = json.dumps({ x[0] : x[1] for x in params.items()})
   print(json_dict, type(json_dict))
   requests.put(cb,data=json_dict, headers={'content-type': 'application/json'})
-  
-@route('/test')
-def fetch_info():
-   return template("Test result: {{result}}", result=request)
 
 @route('/get_matching_message')
 def index():
