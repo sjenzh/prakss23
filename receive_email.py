@@ -52,7 +52,7 @@ def check(params):
         c = conn.cursor()
         c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
         cb_res = c.fetchone()
-        c.execute('SELECT persistent FROM rules WHERE id = ?', (reuslting_id,))
+        c.execute('SELECT persistent FROM rules WHERE id = ?', (resulting_id,))
         is_persistent = c.fetchone()[0]
         
         dict_result = {}
