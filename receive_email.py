@@ -3,6 +3,7 @@ import email
 from email import policy
 import datetime, imaplib, sqlite3, re, requests, json
 import calendar
+from dateutil import parser
 
 EMAIL = 'prakss23@gmail.com'
 PASSWORD = 'flbycwtypcqgszjd'
@@ -11,14 +12,18 @@ SERVER = 'imap.gmail.com'
 def drules(params, target, cur):
     res_ids = []
     cur.execute('SELECT id, '+ target + ' FROM rules')
-    date_res = cur.fetchall()
+    date_res = cur.fetchall() #date is a string so we need to convert it into a datetime object to compare
     for id, date in date_res:
+        print(type(params['date']),params['date'], type(date), date)
         if date == None:
             res_ids.append(id)
-        elif target == 'date_after' and params['date'] > date:
-            res_ids.append(id)
-        elif target == 'date_before' and params['date'] < date:
-            res_ids.append(id)
+        else:
+            #TODO convert date(str) into datetime utc object 
+            date = datetime.datetime.fromisoformat(date).astimezone(datetime.timezone.utc) 
+            if target == 'date_after' and params['date'] > date:
+                res_ids.append(id)
+            elif target == 'date_before' and params['date'] < date:
+                res_ids.append(id)
     return res_ids
 
 def crules(params, target, cur):
@@ -46,17 +51,19 @@ def check(params):
         #TEST select statement using resulting_id and using the callback to perform a PUT request
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
-        c.execute('SELECT callback FROM rules WHERE id = ?', resulting_id)
+        print(type(resulting_id), resulting_id)
+        c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
         cb_res = c.fetchone()
         c.close()
+        
         dict_result = {}
-        dict_result['received_date'] = params['date']
+        dict_result['received_date'] = str(params['date'])
         dict_result['subject'] = params['subject']
         dict_result['sender'] = params['sender']
         dict_result['content'] = params['content']
         dict_result['has_attachment'] = params['has_attachment']
         dict_result = json.dumps(dict_result)
-        requests.put(cb_res,data=dict_result, headers={'content-type': 'application/json'})
+        requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
         #TODO remove e-mail and rule from database
     else:
         #TEST no match: e-mail needs to be saved into the DB
