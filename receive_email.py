@@ -52,6 +52,8 @@ def check(params):
         c = conn.cursor()
         c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
         cb_res = c.fetchone()
+        c.execute('SELECT persistent FROM rules WHERE id = ?', (reuslting_id,))
+        is_persistent = c.fetchone()[0]
         
         dict_result = {}
         dict_result['received_date'] = str(params['date'])
@@ -60,13 +62,17 @@ def check(params):
         dict_result['content'] = params['content']
         dict_result['has_attachment'] = params['has_attachment']
         dict_result = json.dumps(dict_result)
-        requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
-        c.execute('DELETE FROM rules WHERE id = ?', (resulting_id,))
-        conn.commit()
-        conn.close()
-        print('E-mail matched, rule is deleted from database')
+        if(cb_res!=None):
+            requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
+        if(is_persistent):
+            c.execute('UPDATE rules SET callback='' WHERE id = ?', (resulting_id,))
+            print('E-mail matched, rule is persistent')
+        else:
+            c.execute('DELETE FROM rules WHERE id = ?', (resulting_id,))
+            conn.commit()
+            conn.close()
+            print('E-mail matched, rule is deleted from database')
     else:
-        #TEST no match: e-mail needs to be saved into the DB
         print('No match found, inserting e-mail into database')
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
