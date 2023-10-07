@@ -14,7 +14,6 @@ def drules(params, target, cur):
     cur.execute('SELECT id, '+ target + ' FROM rules')
     date_res = cur.fetchall() #date is a string so we need to convert it into a datetime object to compare
     for id, date in date_res:
-        print(type(params['date']),params['date'], type(date), date)
         if date == None:
             res_ids.append(id)
         else:
@@ -51,10 +50,8 @@ def check(params):
         #TEST select statement using resulting_id and using the callback to perform a PUT request
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
-        print(type(resulting_id), resulting_id)
         c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
         cb_res = c.fetchone()
-        c.close()
         
         dict_result = {}
         dict_result['received_date'] = str(params['date'])
@@ -64,7 +61,10 @@ def check(params):
         dict_result['has_attachment'] = params['has_attachment']
         dict_result = json.dumps(dict_result)
         requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
-        #TODO remove e-mail and rule from database
+        c.execute('DELETE FROM rules WHERE id = ?', (resulting_id,))
+        conn.commit()
+        conn.close()
+        print('E-mail matched, rule is deleted from database')
     else:
         #TEST no match: e-mail needs to be saved into the DB
         print('No match found, inserting e-mail into database')

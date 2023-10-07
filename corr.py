@@ -77,9 +77,9 @@ def check(cb,params):
       matched_email_stmt = 'SELECT * FROM messages WHERE id = ?'
       conn = sqlite3.connect('database.db')
       c = conn.cursor()
-      c.execute(matched_email_stmt, min(res))
+      to_delete = min(res)
+      c.execute(matched_email_stmt, to_delete)
       res = c.fetchone()
-      c.close()
       print('Match found:', res)
       print('res removing id', res[2:]) #removes the id and the mail_id
       res_dict_vals = list(res[2:])
@@ -89,6 +89,9 @@ def check(cb,params):
           dict_result[k] = v
       result = json.dumps(dict_result)
       requests.put(cb,data=result, headers={'content-type': 'application/json'})
+      c.execute('DELETE FROM messages WHERE id = ?', to_delete)
+      conn.commit()
+      conn.close()
 
 @route('/get_matching_message')
 def index():
