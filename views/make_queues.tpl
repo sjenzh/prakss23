@@ -1,7 +1,24 @@
 <head>
   <script>
-    function togglePersistency(id) {
-      // send sql statement
+    function togglePersistency(id, persistent) {
+      //TODO send sql statement
+      const data = {id: id, persistency:!(Boolean(persistent))};
+      fetch('/toggle_persistence', {
+     	method: 'POST',
+     	headers: {
+      	'Content-Type': 'application/json',
+      	},
+	body: JSON.stringify(data),
+      }).then((response) => {
+	 if (!response.ok) {
+	   throw new Error('Network response was not ok');
+	 }
+	 return response.json();
+	}).then ((data)) => {
+	 alert('Successful update');
+	}).catch((error) => {
+	 console.error('There was a problem with the fetch operation:', error);
+	});
       alert('toggling persistency for ' + id)
     }
   </script>
@@ -19,9 +36,12 @@
     <h2><b>Rule Queue</b></h2>
     <table border="1">
     %for rule in rules:
-        <tr>
+        <tr onclick="togglePersistency(({{rule[0]}}),({{rule[-1]}}));">
         %for col in rule:
-            <td onclick="handleClick('{{col.id}}');">{{col}}</td>
+            <td>{{col}}</td>
+	    <script>
+	    	console.log("Type of col: " + typeof {{col}});
+	    </script>
         %end
         </tr>
     %end

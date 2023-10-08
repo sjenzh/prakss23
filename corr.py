@@ -19,14 +19,18 @@ def index():
    conn = sqlite3.connect('database.db')
    conn.enable_load_extension(True)
    c = conn.cursor()
-   c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
-   c.execute('SELECT subject FROM rules')
+   c.execute('SELECT id,subject,persistent FROM rules')
    rules_res = c.fetchall()
    c.execute('SELECT subject FROM messages')
    messages_res = c.fetchall()
    c.close()
    output = template('make_queues', {'rules':rules_res, 'messages':messages_res})
    return output
+
+@route('/toggle_persistence')
+def togglePersistency():
+    print('in function', 'request.params', request.params, type(request.params))
+    conn = sqlite3.connect('database.db')
 
 def check(cb,params):
   print(cb)
@@ -95,6 +99,9 @@ def check(cb,params):
 
 @route('/get_matching_message')
 def index():
+    print(request.params,request.params.items())
+    #if valid_input(request.params):
+    #else: #send back 400 and cpee-callback false
     response.headers.content_type =  'text/plain; charset=UTF-8'
     response.headers['CPEE-CALLBACK'] = 'true'
     response.status = 200
