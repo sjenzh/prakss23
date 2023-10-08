@@ -1,9 +1,11 @@
 <head>
   <script>
+    const port=20147;
+    const persistentUrl = ':${port}/toggle_persistence'
     function togglePersistency(id, persistent) {
       //TODO send sql statement
       const data = {id: id, persistency:!(Boolean(persistent))};
-      fetch('/toggle_persistence', {
+      fetch(persistentUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
