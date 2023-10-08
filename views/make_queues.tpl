@@ -1,16 +1,17 @@
 <head>
   <script>
-    const port=20147;
-    const persistentUrl = ':${port}/toggle_persistence'
+    const persistentUrl = 'toggle_persistence'
     function togglePersistency(id, persistent) {
       //TODO send sql statement
-      const data = {id: id, persistency:!(Boolean(persistent))};
+      const data = {"persistency":!(Boolean(persistent)), "id": id};
+      json_data = JSON.stringify(data);
+      console.log(JSON.stringify(data));
       fetch(persistentUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: json_data,
       }).then((response) => {
         if (!response.ok) {
           throw new Error('Network response was not ok');

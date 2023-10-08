@@ -27,10 +27,15 @@ def index():
    output = template('make_queues', {'rules':rules_res, 'messages':messages_res})
    return output
 
-@route('/toggle_persistence')
+@route('/toggle_persistence', method='POST')
 def togglePersistency():
-    print('in function', 'request.params', request.params, type(request.params))
+    print('request.json', request.json, type(request.json))
     conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    print(request.json.values(), type(request.json.values()))
+    c.execute('UPDATE rules SET persistent = ? WHERE id = ?',list(request.json.values()))
+    conn.commit()
+    conn.close()
 
 def check(cb,params):
   print(cb)
