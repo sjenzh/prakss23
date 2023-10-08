@@ -1,11 +1,19 @@
-<style>
-.row {
-    display: flex;
+<head>
+  <script>
+    function togglePersistency(id) {
+      // send sql statement
+      alert('toggling persistency for ' + id)
+    }
+  </script>
+  <style>
+  .row {
+      display: flex;
+    }
+  .column {
+      flex: 50%;
   }
-.column {
-    flex: 50%;
-}
-</style>
+  </style>
+</head>
 <div class="row">
   <div class="column">
     <h2><b>Rule Queue</b></h2>
@@ -13,7 +21,7 @@
     %for rule in rules:
         <tr>
         %for col in rule:
-            <td>{{col}}</td>
+            <td onclick="handleClick('{{col.id}}');">{{col}}</td>
         %end
         </tr>
     %end
