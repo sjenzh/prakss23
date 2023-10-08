@@ -4,23 +4,23 @@
       //TODO send sql statement
       const data = {id: id, persistency:!(Boolean(persistent))};
       fetch('/toggle_persistence', {
-     	method: 'POST',
-     	headers: {
-      	'Content-Type': 'application/json',
-      	},
-	body: JSON.stringify(data),
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
       }).then((response) => {
-	 if (!response.ok) {
-	   throw new Error('Network response was not ok');
-	 }
-	 return response.json();
-	}).then ((data)) => {
-	 alert('Successful update');
-	}).catch((error) => {
-	 console.error('There was a problem with the fetch operation:', error);
-	});
-      alert('toggling persistency for ' + id)
-    }
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      }).then((data) => {
+      // Handle the response from the server (if needed)
+      alert('Updated successfully');
+    }).catch((error) => {
+      console.error('There was a problem with the fetch operation:', error);
+    });
+}
   </script>
   <style>
   .row {
@@ -36,7 +36,7 @@
     <h2><b>Rule Queue</b></h2>
     <table border="1">
     %for rule in rules:
-        <tr onclick="togglePersistency(({{rule[0]}}),({{rule[-1]}}));">
+        <tr onclick="togglePersistency({{rule[0]}},{{rule[-1]}});">
         %for col in rule:
             <td>{{col}}</td>
 	    <script>
