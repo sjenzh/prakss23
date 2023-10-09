@@ -72,70 +72,68 @@ def is_persistent(params):
 def check(cb,params):
   print(cb)
   print(params)
-  #TODO if persistent, don't perform the code
-  #if not persistent, perform code
-  is_persistent(params)
-  stmt = ""
-  stmt_params = []
-  rule_columns = []
-  for (k,v) in params.items():
-      if len(v) != 0: #field is not empty
-          rule_columns.append(k)
-          if((k=='subject') or (k=='content') or (k=='sender')):#regex
-              stmt = stmt+k+" REGEXP \""+v+"\" AND "
-          elif((k=='before')): #datetime 
-              stmt = stmt+"received_date < ?"+" AND "
-              stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
-          elif((k=='after')): #datetime
-              stmt = stmt+"received_date > ?"+" AND "
-              stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
-  if len(stmt)>1:
-      stmt = stmt[:-5] #removes last AND
-  sql = "SELECT id FROM messages WHERE "+stmt
-  conn = sqlite3.connect('database.db')
-  conn.enable_load_extension(True)
-  c = conn.cursor()
-  c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
-  c.execute(sql, stmt_params)
-  res = c.fetchall()
-  conn.close()
-  if len(res) == 0:
-      rule_columns.append('callback')
-      rule_values = list(params.values())
-      rule_values.append(cb)
-      rule_values = [x for x in rule_values if x != ""]
-      for x in rule_columns:
-          if x == 'after':
-              rule_columns[rule_columns.index(x)] = 'date_after'
-          elif x == 'before':
-              rule_columns[rule_columns.index(x)] = 'date_before'
-      placeholders = ', '.join(['?'] * len(rule_values))
-      insert_into_stmt = f'INSERT INTO rules ({", ".join(rule_columns)}) VALUES ({placeholders})'
-      conn = sqlite3.connect('database.db')
-      c = conn.cursor()
-      c.execute(insert_into_stmt, rule_values)
-      conn.commit()
-      conn.close()
-      print('No matches found, adding rule to database')
-  else:
-      matched_email_stmt = 'SELECT * FROM messages WHERE id = ?'
-      conn = sqlite3.connect('database.db')
-      c = conn.cursor()
-      to_delete = min(res)
-      c.execute(matched_email_stmt, to_delete)
-      res = c.fetchone()
-      print('Match found:', res)
-      print('res removing id', res[2:]) #removes the id and the mail_id
-      res_dict_vals = list(res[2:])
-      res_dict_keys = ['date','subject','sender','content', 'has_attachment']
-      dict_result = {}
-      for k, v in zip(res_dict_keys, res_dict_vals):
-          dict_result[k] = v
-      result = json.dumps(dict_result)
-      requests.put(cb,data=result, headers={'content-type': 'application/json'})
-      c.execute('DELETE FROM messages WHERE id = ?', to_delete)
-      conn.commit()
-      conn.close()
+  if not is_persistent(params):
+    stmt = ""
+    stmt_params = []
+    rule_columns = []
+    for (k,v) in params.items():
+        if len(v) != 0: #field is not empty
+            rule_columns.append(k)
+            if((k=='subject') or (k=='content') or (k=='sender')):#regex
+                stmt = stmt+k+" REGEXP \""+v+"\" AND "
+            elif((k=='before')): #datetime 
+                stmt = stmt+"received_date < ?"+" AND "
+                stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
+            elif((k=='after')): #datetime
+                stmt = stmt+"received_date > ?"+" AND "
+                stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
+    if len(stmt)>1:
+        stmt = stmt[:-5] #removes last AND
+    sql = "SELECT id FROM messages WHERE "+stmt
+    conn = sqlite3.connect('database.db')
+    conn.enable_load_extension(True)
+    c = conn.cursor()
+    c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
+    c.execute(sql, stmt_params)
+    res = c.fetchall()
+    conn.close()
+    if len(res) == 0:
+        rule_columns.append('callback')
+        rule_values = list(params.values())
+        rule_values.append(cb)
+        rule_values = [x for x in rule_values if x != ""]
+        for x in rule_columns:
+            if x == 'after':
+                rule_columns[rule_columns.index(x)] = 'date_after'
+            elif x == 'before':
+                rule_columns[rule_columns.index(x)] = 'date_before'
+        placeholders = ', '.join(['?'] * len(rule_values))
+        insert_into_stmt = f'INSERT INTO rules ({", ".join(rule_columns)}) VALUES ({placeholders})'
+        conn = sqlite3.connect('database.db')
+        c = conn.cursor()
+        c.execute(insert_into_stmt, rule_values)
+        conn.commit()
+        conn.close()
+        print('No matches found, adding rule to database')
+    else:
+        matched_email_stmt = 'SELECT * FROM messages WHERE id = ?'
+        conn = sqlite3.connect('database.db')
+        c = conn.cursor()
+        to_delete = min(res)
+        c.execute(matched_email_stmt, to_delete)
+        res = c.fetchone()
+        print('Match found:', res)
+        print('res removing id', res[2:]) #removes the id and the mail_id
+        res_dict_vals = list(res[2:])
+        res_dict_keys = ['date','subject','sender','content', 'has_attachment']
+        dict_result = {}
+        for k, v in zip(res_dict_keys, res_dict_vals):
+            dict_result[k] = v
+        result = json.dumps(dict_result)
+        requests.put(cb,data=result, headers={'content-type': 'application/json'})
+        c.execute('DELETE FROM messages WHERE id = ?', to_delete)
+        conn.commit()
+        conn.close()
 
 def check_is_date(date):
     try:
