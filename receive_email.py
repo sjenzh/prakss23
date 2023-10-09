@@ -52,8 +52,8 @@ def check(params):
       c = conn.cursor()
       c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
       cb_res = c.fetchone()
-      #c.execute('SELECT persistent FROM rules WHERE id = ?', (resulting_id,))
-      #is_persistent = c.fetchone()[0]
+      c.execute('SELECT persistent FROM rules WHERE id = ?', (resulting_id,))
+      is_persistent = c.fetchone()[0]
       
       dict_result = {}
       dict_result['received_date'] = str(params['date'])
@@ -64,12 +64,15 @@ def check(params):
       dict_result = json.dumps(dict_result)
       if(cb_res!=None):
         requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
-        # if(is_persistent):
-        #     c.execute('UPDATE rules SET callback=NULL WHERE id = ?', (resulting_id,))
-        #     print('E-mail matched, rule is persistent')
-        # else:
         c.execute('DELETE FROM rules WHERE id = ?', (resulting_id,))
         conn.commit()
+        #TODO what to do if rule is persistent?
+        print('persistency', is_persistent)
+        if (is_persistent):
+          print('Rule was persistent. Saving e-mail into database')
+          c.execute('INSERT INTO messages (received_date, subject, sender, content, has_attachment, mail_id) VALUES (?,?,?,?,?,?)', 
+                (params['date'], params['subject'], params['sender'], params['content'], params['has_attachment'], params['mail_id']))
+          conn.commit()
         conn.close()
         print('E-mail matched, rule is deleted from database')
     else:
