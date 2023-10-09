@@ -46,44 +46,44 @@ def check(params):
     intersec = list(set(res_ids[0]) & set(res_ids[1]) & set(res_ids[2]) & set(res_ids[3]) & set(res_ids[4]))
     conn.close()
     if len(intersec) > 0:
-        resulting_id = min(intersec)
-        #TEST select statement using resulting_id and using the callback to perform a PUT request
-        conn = sqlite3.connect('database.db')
-        c = conn.cursor()
-        c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
-        cb_res = c.fetchone()
-        c.execute('SELECT persistent FROM rules WHERE id = ?', (resulting_id,))
-        is_persistent = c.fetchone()[0]
-        
-        dict_result = {}
-        dict_result['received_date'] = str(params['date'])
-        dict_result['subject'] = params['subject']
-        dict_result['sender'] = params['sender']
-        dict_result['content'] = params['content']
-        dict_result['has_attachment'] = params['has_attachment']
-        dict_result = json.dumps(dict_result)
-        if(cb_res!=None):
-            requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
-        if(is_persistent):
-            c.execute('UPDATE rules SET callback='' WHERE id = ?', (resulting_id,))
-            print('E-mail matched, rule is persistent')
-        else:
-            c.execute('DELETE FROM rules WHERE id = ?', (resulting_id,))
-            conn.commit()
-            conn.close()
-            print('E-mail matched, rule is deleted from database')
-    else:
-        print('No match found, inserting e-mail into database')
-        conn = sqlite3.connect('database.db')
-        c = conn.cursor()
-        c.execute('INSERT INTO messages (received_date, subject, sender, content, has_attachment, mail_id) VALUES (?,?,?,?,?,?)', 
-                  (params['date'], params['subject'], params['sender'], params['content'], params['has_attachment'], params['mail_id']))
+      resulting_id = min(intersec)
+      #TEST select statement using resulting_id and using the callback to perform a PUT request
+      conn = sqlite3.connect('database.db')
+      c = conn.cursor()
+      c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
+      cb_res = c.fetchone()
+      #c.execute('SELECT persistent FROM rules WHERE id = ?', (resulting_id,))
+      #is_persistent = c.fetchone()[0]
+      
+      dict_result = {}
+      dict_result['received_date'] = str(params['date'])
+      dict_result['subject'] = params['subject']
+      dict_result['sender'] = params['sender']
+      dict_result['content'] = params['content']
+      dict_result['has_attachment'] = params['has_attachment']
+      dict_result = json.dumps(dict_result)
+      if(cb_res!=None):
+        requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
+        # if(is_persistent):
+        #     c.execute('UPDATE rules SET callback=NULL WHERE id = ?', (resulting_id,))
+        #     print('E-mail matched, rule is persistent')
+        # else:
+        c.execute('DELETE FROM rules WHERE id = ?', (resulting_id,))
         conn.commit()
         conn.close()
+        print('E-mail matched, rule is deleted from database')
+    else:
+      print('No match found, inserting e-mail into database')
+      conn = sqlite3.connect('database.db')
+      c = conn.cursor()
+      c.execute('INSERT INTO messages (received_date, subject, sender, content, has_attachment, mail_id) VALUES (?,?,?,?,?,?)', 
+                (params['date'], params['subject'], params['sender'], params['content'], params['has_attachment'], params['mail_id']))
+      conn.commit()
+      conn.close()
 
 def convert_date(date):
-    res= date[8:10]+'-'+calendar.month_name[int(date[5:7])][:3]+'-'+date[0:4]
-    return res
+  res= date[8:10]+'-'+calendar.month_name[int(date[5:7])][:3]+'-'+date[0:4]
+  return res
 
 mail = imaplib.IMAP4_SSL(SERVER)
 mail.login(EMAIL, PASSWORD)

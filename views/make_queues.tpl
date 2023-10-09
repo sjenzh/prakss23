@@ -38,13 +38,17 @@
   <div class="column">
     <h2><b>Rule Queue</b></h2>
     <table border="1">
+    <thead>
+	<tr>
+	  <th scope="col">ID</th>
+	  <th scope="col">Subject RegExp</th>
+	  <th scope="col">Persistent</th>
+	</tr>
+    </thead>
     %for rule in rules:
         <tr onclick="togglePersistency({{rule[0]}},{{rule[-1]}});">
         %for col in rule:
             <td>{{col}}</td>
-	    <script>
-	    	console.log("Type of col: " + typeof {{col}});
-	    </script>
         %end
         </tr>
     %end
@@ -53,6 +57,12 @@
   <div class="column">
     <h2><b>Message Queue</b></h2>
     <table border="1">
+    <thead>
+	<tr>
+	  <th scope="col">ID</th>
+	  <th scope="col">Subject</th>
+	</tr>
+    </thead>
     %for message in messages:
         <tr>
         %for col in message:

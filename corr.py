@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import os, requests
+import os, requests, re
 import datetime
 from dateutil import parser
 import sqlite3
@@ -21,9 +21,9 @@ def index():
    c = conn.cursor()
    c.execute('SELECT id,subject,persistent FROM rules')
    rules_res = c.fetchall()
-   c.execute('SELECT subject FROM messages')
+   c.execute('SELECT id,subject FROM messages')
    messages_res = c.fetchall()
-   c.close()
+   conn.close()
    output = template('make_queues', {'rules':rules_res, 'messages':messages_res})
    return output
 
@@ -36,6 +36,10 @@ def togglePersistency():
     c.execute('UPDATE rules SET persistent = ? WHERE id = ?',list(request.json.values()))
     conn.commit()
     conn.close()
+    response.body = ''
+    response.status = 200
+    response.headers.content_type =  'text/plain; charset=UTF-8'
+    return response
 
 def check(cb,params):
   print(cb)
@@ -63,7 +67,7 @@ def check(cb,params):
   c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
   c.execute(sql, stmt_params)
   res = c.fetchall()
-  c.close()
+  conn.close()
   if len(res) == 0:
       rule_columns.append('callback')
       rule_values = list(params.values())
@@ -102,18 +106,72 @@ def check(cb,params):
       conn.commit()
       conn.close()
 
+def check_is_date(date):
+    try:
+        datetime.datetime.fromisoformat(date)
+        return True
+    except:
+        print('The given input was not a valid date according to ISO 8601.')
+        #TODO: fetch detailed error message
+        return False
+
+def check_is_regex(pattern):
+    try:
+        re.compile(pattern)
+        return True
+    except re.error:
+        print('The given input was not a regex.')
+        return False
+
+def check_is_bool(input):
+    return input == 0 or input or isinstance(input, bool)
+
+def valid_input(params):
+    print('in validity check', type(params), params, params.items(), params.keys(), params.values())
+    for k,v in params.items():
+        if v != '':
+            if k == 'subject' or k == 'content' or k == 'sender':
+                print('perform regex check', v)
+                if not check_is_regex(v):
+                    return False
+                print(check_is_regex(v))
+            elif k == 'after' or k == 'before':
+                print('perform date iso check',v)
+                if not check_is_date(v): 
+                    return False
+                print(check_is_date(v))
+            elif k == 'has_attachment':
+                print('perform bool check',v)
+                if not check_is_bool(v):
+                    return False
+                print(check_is_bool(v))
+            else:
+                print('throw exception for wrong keys')
+                return False
+        else:
+            if k not in ('subject','content','sender','after','before','has_attachment'):
+                print('throw exception for wrong keys')
+                return False
+    return True
+
 @route('/get_matching_message')
 def index():
     print(request.params,request.params.items())
-    #if valid_input(request.params):
-    #else: #send back 400 and cpee-callback false
-    response.headers.content_type =  'text/plain; charset=UTF-8'
-    response.headers['CPEE-CALLBACK'] = 'true'
-    response.status = 200
-    response.body = ''
-    thread = Thread(target=check, args=[request.headers['Cpee-Callback'],request.params])
-    thread.start()
-    return response
+    if not valid_input(request.params):
+        print(request.params.values(), type(request.params.values))
+        response.status = 400
+        response.headers.content_type = 'text/plain; charset=UTF-8'
+        response.headers['cpee-callback'] = 'false'
+        response.body = 'Please check that your input complies with the provided format: TODO lorem ipsum...'
+        return response
+    else: #send back 400 and cpee-callback false
+        response.headers.content_type =  'text/plain; charset=UTF-8'
+        response.headers['CPEE-CALLBACK'] = 'true'
+        response.status = 200
+        response.body = ''
+        thread = Thread(target=check, args=[request.headers['Cpee-Callback'],request.params])
+        thread.start()
+        return response
 
 port = int(os.environ.get('PORT', 20147))
 run(host='::1', port=port, debug=True)
