@@ -81,12 +81,14 @@ def check(cb,params):
             rule_columns.append(k)
             if((k=='subject') or (k=='content') or (k=='sender')):#regex
                 stmt = stmt+k+" REGEXP \""+v+"\" AND "
-            elif((k=='before')): #datetime 
-                stmt = stmt+"received_date < ?"+" AND "
+            elif(k=='before'): #datetime 
+                stmt = stmt+"received_date < ? AND "
                 stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
-            elif((k=='after')): #datetime
-                stmt = stmt+"received_date > ?"+" AND "
+            elif(k=='after'): #datetime
+                stmt = stmt+"received_date > ? AND "
                 stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
+            elif(k=='has_attachment'): #bool
+                stmt = stmt+"has_attachment = "+str(bool(v))+" AND "
     if len(stmt)>1:
         stmt = stmt[:-5] #removes last AND
     sql = "SELECT id FROM messages WHERE "+stmt

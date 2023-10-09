@@ -34,6 +34,18 @@ def crules(params, target, cur):
               res_ids.append(id)
     return res_ids
 
+def brules(params, target, cur):
+    res_ids = []
+    cur.execute('SELECT id, ' + target + ' FROM rules')
+    bool_results = cur.fetchall()
+    print(bool_results, type(bool_results))
+    for id, boolean in bool_results:
+      print(boolean, type(boolean), params[target], type(params[target]))
+      if boolean == None or bool(boolean) == params[target]:
+        res_ids.append(id)
+    print(res_ids)
+    return res_ids
+
 def check(params):
     conn = sqlite3.connect('database.db')
     cur = conn.cursor()
@@ -43,7 +55,8 @@ def check(params):
     res_ids.append(crules(params,'subject', cur))
     res_ids.append(crules(params,'content', cur))
     res_ids.append(crules(params,'sender', cur))
-    intersec = list(set(res_ids[0]) & set(res_ids[1]) & set(res_ids[2]) & set(res_ids[3]) & set(res_ids[4]))
+    res_ids.append(brules(params, 'has_attachment', cur))
+    intersec = list(set(res_ids[0]) & set(res_ids[1]) & set(res_ids[2]) & set(res_ids[3]) & set(res_ids[4])& set(res_ids[5]))
     conn.close()
     if len(intersec) > 0:
       resulting_id = min(intersec)
