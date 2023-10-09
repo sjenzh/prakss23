@@ -41,9 +41,40 @@ def togglePersistency():
     response.headers.content_type =  'text/plain; charset=UTF-8'
     return response
 
+def is_persistent(params):
+  #TODO: check if rule already exists as such in database. if yes, set persistent to 1,
+  # if no, set persistent to 0/continue operation as intended
+  values = list(params.values())
+  columns = list(params.keys())
+  placeholders = ', '.join(['?'] * len(values))
+  print(type(values), 'values',values, type(columns), 'columns', columns)
+  sql_stmt = f'SELECT id FROM rules WHERE '
+  sql_stmt += " AND ".join([f"{key} = ?" for key in columns])
+  conn = sqlite3.connect('database.db')
+  c = conn.cursor()
+  c.execute(sql_stmt, values)
+  req_ids = c.fetchall()
+  conn.close()
+  print(type(req_ids), 'req_ids')
+  if len(req_ids) > 0:
+    for id in req_ids:
+      conn = sqlite3.connect('database.db')
+      c = conn.cursor()
+      stmt = 'UPDATE rules SET persistent = 1 WHERE id = ?'
+      c.execute(stmt, id)
+      conn.commit()
+      conn.close()
+      print('Duplicate, alter old rule to persistent')
+    return True
+  else:
+    print('no dupe, proceeding to process rule')
+    return False
 def check(cb,params):
   print(cb)
   print(params)
+  #TODO if persistent, don't perform the code
+  #if not persistent, perform code
+  is_persistent(params)
   stmt = ""
   stmt_params = []
   rule_columns = []
