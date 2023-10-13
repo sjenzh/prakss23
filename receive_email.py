@@ -57,18 +57,19 @@ def check(params):
     curdir = os.path.dirname(__file__)
     conn = sqlite3.connect(curdir + '/database.db')
     cur = conn.cursor()
-    res_ids = []
-    res_ids.append(drules(params,'date_after', cur))
-    res_ids.append(drules(params,'date_before', cur))
-    res_ids.append(crules(params,'subject', cur))
-    res_ids.append(crules(params,'content', cur))
-    res_ids.append(crules(params,'sender', cur))
-    res_ids.append(brules(params, 'has_attachment', cur))
-    intersec = list(set(res_ids[0]) & set(res_ids[1]) & set(res_ids[2]) & set(res_ids[3]) & set(res_ids[4])& set(res_ids[5]))
+    res_ids = [
+       drules(params,'date_after', cur),
+       drules(params,'date_before', cur),
+       crules(params,'subject', cur),
+       crules(params,'content', cur),
+       crules(params,'sender', cur),
+       brules(params, 'has_attachment', cur)
+    ]
     conn.close()
+    
+    intersec = list(set(res_ids[0]) & set(res_ids[1]) & set(res_ids[2]) & set(res_ids[3]) & set(res_ids[4])& set(res_ids[5]))
     if len(intersec) > 0:
       resulting_id = min(intersec)
-      #TEST select statement using resulting_id and using the callback to perform a PUT request
       curdir = os.path.dirname(__file__)
       conn = sqlite3.connect(curdir + '/database.db')
       c = conn.cursor()
@@ -77,12 +78,14 @@ def check(params):
       c.execute('SELECT persistent FROM rules WHERE id = ?', (resulting_id,))
       is_persistent = c.fetchone()[0]
       
-      dict_result = {}
-      dict_result['received_date'] = str(params['date'])
-      dict_result['subject'] = params['subject']
-      dict_result['sender'] = params['sender']
-      dict_result['content'] = params['content']
-      dict_result['has_attachment'] = params['has_attachment']
+      dict_result = {
+        'received_date': str(params['date']),
+        'subject': params['subject'],
+        'sender': params['sender'],
+        'content': params['content'],
+        'has_attachment': params['has_attachment']
+      }
+
       dict_result = json.dumps(dict_result)
       if(cb_res!=None):
         requests.put(cb_res[0],data=dict_result, headers={'content-type': 'application/json', 'cpee-callback': 'true'})
@@ -111,40 +114,8 @@ def convert_date(date):
   res= date[8:10]+'-'+calendar.month_name[int(date[5:7])][:3]+'-'+date[0:4]
   return res
 
-mail = imaplib.IMAP4_SSL(SERVER)
-mail.login(EMAIL, PASSWORD)
-mail.select('inbox')
-
-# curdir = os.path.dirname(__file__)
-# conn = sqlite3.connect(curdir + '/database.db')
-# c = conn.cursor()
-# c.execute('SELECT received_date, mail_id FROM messages WHERE id = (SELECT MAX(id) FROM messages)')
-# date_id = c.fetchone()
-# conn.close()
-# if date_id == None:
-#     status, data = mail.search(None, 'ALL')
-# else:
-#     result = convert_date(date_id[0])
-#     status, data = mail.search(None, 'SENTSINCE '+result)
-status, data = mail.search(None, '(UNSEEN)')    
-
-mail_ids = []
-
-for block in data:
-    mail_ids += block.split()
-    # if date_id != None: 
-    #    i = mail_ids.index(bytes(date_id[1]),0,len(mail_ids))
-    #    if i+1 >= len(mail_ids):
-    #         print('No new emails')
-    #         mail_ids=[]
-    #         break #stop when there are no new e-mails
-    #    else:
-    #         mail_ids = mail_ids[(i+1):]
-if len(mail_ids) == 0:
-  print('No new emails')
-
-for id in mail_ids:
-    status, data = mail.fetch(id, '(RFC822)')
+def process_email(mail, mail_id):
+    status, data = mail.fetch(mail_id, '(RFC822)')
     for response_part in data:
         if isinstance(response_part, tuple):
             message = email.message_from_bytes(response_part[1], policy=policy.HTTP)
@@ -152,7 +123,7 @@ for id in mail_ids:
             mail_from = message['from'].addresses[0].username +'@'+ message['from'].addresses[0].domain
             mail_subject = str(message['subject'])
             mail_date = datetime.datetime.fromisoformat(message['date'].datetime.astimezone(datetime.timezone.utc).isoformat())
-
+            
             if message.is_multipart():
                 mail_content = ''
                 for part in message.iter_parts():
@@ -160,11 +131,35 @@ for id in mail_ids:
                         mail_content += part.get_content()
             else:
                 mail_content = message.get_payload()
-
-            params = {'date': mail_date,
-                      'sender': mail_from,
-                      'subject': mail_subject, 
-                      'content': mail_content, 
-                      'has_attachment': mail_has_attachment,
-                      'mail_id': id}
+            
+            params = {
+                'date': mail_date,
+                'sender': mail_from,
+                'subject': mail_subject, 
+                'content': mail_content, 
+                'has_attachment': mail_has_attachment,
+                'mail_id': mail_id
+            }
             check(params)
+
+
+def main():
+    mail = imaplib.IMAP4_SSL(SERVER)
+    mail.login(EMAIL, PASSWORD)
+    mail.select('inbox')
+    
+    status, data = mail.search(None, '(UNSEEN)')    
+    mail_ids = []
+    
+    for block in data:
+        mail_ids += block.split()
+
+    if len(mail_ids) == 0:
+        print('No new emails')
+    for mail_id in mail_ids:
+       process_email(mail, mail_id)
+    
+    mail.logout()
+
+if __name__ == '__main__':
+    main()
