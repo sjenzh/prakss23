@@ -1,23 +1,27 @@
 #!/usr/bin/python3
-import os, requests, re
 import datetime
-from dateutil import parser
-import sqlite3
 import json
-import datetime
+import os
+import requests
+import re
+import sqlite3
 
 from pathlib import Path
 from threading import Thread
-
-from bottle import route, run, template, response, request
-from bottle import TEMPLATE_PATH
+from bottle import (
+request,
+response, 
+route, 
+run, 
+template, 
+TEMPLATE_PATH
+)
 
 TEMPLATE_PATH.append(str(Path('prakss23')/ 'views'))
 
 @route('/')
 def index():
    conn = sqlite3.connect('database.db')
-   conn.enable_load_extension(True)
    c = conn.cursor()
    c.execute('SELECT id,subject,persistent FROM rules')
    rules_res = c.fetchall()
@@ -64,11 +68,10 @@ def is_persistent(params):
       c.execute(stmt, id)
       conn.commit()
       conn.close()
-      print('Duplicate, alter old rule to persistent')
     return True
   else:
-    print('no dupe, proceeding to process rule')
     return False
+
 def check(cb,params):
   print(cb)
   print(params)
@@ -187,15 +190,13 @@ def valid_input(params):
 
 @route('/get_matching_message')
 def index():
-    print(request.params,request.params.items())
     if not valid_input(request.params):
-        print(request.params.values(), type(request.params.values))
         response.status = 400
         response.headers.content_type = 'text/plain; charset=UTF-8'
         response.headers['cpee-callback'] = 'false'
         response.body = 'Please check that your input complies with the provided format: TODO lorem ipsum...'
         return response
-    else: #send back 400 and cpee-callback false
+    else:
         response.headers.content_type =  'text/plain; charset=UTF-8'
         response.headers['CPEE-CALLBACK'] = 'true'
         response.status = 200

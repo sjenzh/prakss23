@@ -1,9 +1,16 @@
+#/usr/bin/python3
 #https://humberto.io/blog/sending-and-receiving-emails-with-python/
 import email
 from email import policy
-import datetime, imaplib, sqlite3, re, requests, json
+
+import os 
+import datetime
+import imaplib
+import re
+import sqlite3
+import requests
+import json
 import calendar
-from dateutil import parser
 
 EMAIL = 'prakss23@gmail.com'
 PASSWORD = 'flbycwtypcqgszjd'
@@ -47,7 +54,8 @@ def brules(params, target, cur):
     return res_ids
 
 def check(params):
-    conn = sqlite3.connect('database.db')
+    curdir = os.path.dirname(__file__)
+    conn = sqlite3.connect(curdir + '/database.db')
     cur = conn.cursor()
     res_ids = []
     res_ids.append(drules(params,'date_after', cur))
@@ -61,7 +69,8 @@ def check(params):
     if len(intersec) > 0:
       resulting_id = min(intersec)
       #TEST select statement using resulting_id and using the callback to perform a PUT request
-      conn = sqlite3.connect('database.db')
+      curdir = os.path.dirname(__file__)
+      conn = sqlite3.connect(curdir + '/database.db')
       c = conn.cursor()
       c.execute('SELECT callback FROM rules WHERE id = ?', (resulting_id,))
       cb_res = c.fetchone()
@@ -90,7 +99,8 @@ def check(params):
         print('E-mail matched, rule is deleted from database')
     else:
       print('No match found, inserting e-mail into database')
-      conn = sqlite3.connect('database.db')
+      curdir = os.path.dirname(__file__)
+      conn = sqlite3.connect(curdir + '/database.db')
       c = conn.cursor()
       c.execute('INSERT INTO messages (received_date, subject, sender, content, has_attachment, mail_id) VALUES (?,?,?,?,?,?)', 
                 (params['date'], params['subject'], params['sender'], params['content'], params['has_attachment'], params['mail_id']))
@@ -105,29 +115,33 @@ mail = imaplib.IMAP4_SSL(SERVER)
 mail.login(EMAIL, PASSWORD)
 mail.select('inbox')
 
-conn = sqlite3.connect('database.db')
-c = conn.cursor()
-c.execute('SELECT received_date, mail_id FROM messages WHERE id = (SELECT MAX(id) FROM messages)')
-date_id = c.fetchone()
-conn.close()
-if date_id == None:
-    status, data = mail.search(None, 'ALL')
-else:
-    result = convert_date(date_id[0])
-    status, data = mail.search(None, 'SENTSINCE '+result)
+# curdir = os.path.dirname(__file__)
+# conn = sqlite3.connect(curdir + '/database.db')
+# c = conn.cursor()
+# c.execute('SELECT received_date, mail_id FROM messages WHERE id = (SELECT MAX(id) FROM messages)')
+# date_id = c.fetchone()
+# conn.close()
+# if date_id == None:
+#     status, data = mail.search(None, 'ALL')
+# else:
+#     result = convert_date(date_id[0])
+#     status, data = mail.search(None, 'SENTSINCE '+result)
+status, data = mail.search(None, '(UNSEEN)')    
 
 mail_ids = []
 
 for block in data:
     mail_ids += block.split()
-    if date_id != None: 
-       i = mail_ids.index(bytes(date_id[1]),0,len(mail_ids))
-       if i+1 >= len(mail_ids):
-            print('No new emails')
-            mail_ids=[]
-            break #stop when there are no new e-mails
-       else:
-            mail_ids = mail_ids[(i+1):]
+    # if date_id != None: 
+    #    i = mail_ids.index(bytes(date_id[1]),0,len(mail_ids))
+    #    if i+1 >= len(mail_ids):
+    #         print('No new emails')
+    #         mail_ids=[]
+    #         break #stop when there are no new e-mails
+    #    else:
+    #         mail_ids = mail_ids[(i+1):]
+if len(mail_ids) == 0:
+  print('No new emails')
 
 for id in mail_ids:
     status, data = mail.fetch(id, '(RFC822)')
