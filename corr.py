@@ -44,28 +44,6 @@ def is_persistent(params):
 def convert_iso_str_to_utc_datetime (str_date):
     return datetime.datetime.fromisoformat(str_date).astimezone(datetime.timezone.utc)
 
-def mail_query_builder(params):
-    query = ''
-    query_params = []
-    rule_columns = []
-    for (key,value) in params.items():
-        if len(value) != 0: #field is not empty
-            rule_columns.append(key)
-            if key in ['subject', 'content', 'sender']:
-                query = query + key + ' REGEXP \"' + value + '\" AND '
-            elif key == 'before': 
-                query = query + 'received_date < ? AND '
-                query_params.append(convert_iso_str_to_utc_datetime(value))
-            elif key == 'after': 
-                query = query + 'received_date > ? AND '
-                query_params.append(convert_iso_str_to_utc_datetime(value))
-            elif key == 'has_attachment': 
-                query = query + 'has_attachment = '+str(bool(value))+' AND '
-    if len(query) > 1:
-        query = query[:-5] #removes last AND
-    return 'SELECT id FROM messages WHERE '+query, query_params, rule_columns
-
-
 def check(cb,params):
     if not is_persistent(params):
         query = ''
@@ -86,7 +64,7 @@ def check(cb,params):
                     query = query + 'has_attachment = '+str(bool(value))+' AND '
         if len(query)>1:
             query = query[:-5] #removes last AND
-        final_sql_query = mail_query_builder(params)
+        final_sql_query = 'SELECT id FROM messages WHERE '+query
 
         conn = sqlite3.connect('database.db')
         conn.enable_load_extension(True)
