@@ -4,8 +4,8 @@
   <script>
     const persistentUrl = 'toggle_persistence'
     
-    function togglePersistency(id, persistent) {
-      const data = {"persistency":!(Boolean(persistent)), "id": id};
+    function togglePersistence(id, persistent) {
+      const data = {"persistence":!(Boolean(persistent)), "id": id};
       const json_data = JSON.stringify(data);
       
       fetch(persistentUrl, {
@@ -47,12 +47,17 @@
         <thead>
           <tr>
             <th scope="col">ID</th>
-            <th scope="col">Subject RegExp</th>
+            <th scope="col">Sender RE</th>
+            <th scope="col">Subject RE</th>
+            <th scope="col">Date After</th>
+            <th scope="col">Date Before</th>
+            <th scope="col">Attachment Y/N</th>
+            <th scope="col">Content RE</th>
             <th scope="col">Persistent</th>
           </tr>
         </thead>
         %for rule in rules:
-          <tr onclick="togglePersistency({{rule[0]}},{{rule[-1]}});">
+          <tr onclick="togglePersistence({{rule[0]}},{{rule[-1]}});">
             %for col in rule:
               <td>{{col}}</td>
             %end
@@ -66,7 +71,11 @@
         <thead>
           <tr>
             <th scope="col">ID</th>
+            <th scope="col">Sender</th>
             <th scope="col">Subject</th>
+            <th scope="col">Date</th>
+            <th scope="col">Attachment</th>
+            <th scope="col">Content</th>
           </tr>
         </thead>
         %for message in messages:

@@ -9,144 +9,140 @@ import sqlite3
 from pathlib import Path
 from threading import Thread
 from bottle import (
-request,
-response, 
-route, 
-run, 
-template, 
-TEMPLATE_PATH
+    request,
+    response, 
+    route, 
+    run, 
+    template, 
+    TEMPLATE_PATH
 )
 
 TEMPLATE_PATH.append(str(Path('prakss23')/ 'views'))
 
-@route('/')
-def index():
-   conn = sqlite3.connect('database.db')
-   c = conn.cursor()
-   c.execute('SELECT id,subject,persistent FROM rules')
-   rules_res = c.fetchall()
-   c.execute('SELECT id,subject FROM messages')
-   messages_res = c.fetchall()
-   conn.close()
-   output = template('make_queues', {'rules':rules_res, 'messages':messages_res})
-   return output
-
-@route('/toggle_persistence', method='POST')
-def togglePersistency():
-    print('request.json', request.json, type(request.json))
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-    print(request.json.values(), type(request.json.values()))
-    c.execute('UPDATE rules SET persistent = ? WHERE id = ?',list(request.json.values()))
-    conn.commit()
-    conn.close()
-    response.body = ''
-    response.status = 200
-    response.headers.content_type =  'text/plain; charset=UTF-8'
-    return response
-
 def is_persistent(params):
-  #TODO: check if rule already exists as such in database. if yes, set persistent to 1,
-  # if no, set persistent to 0/continue operation as intended
-  values = list(params.values())
-  columns = list(params.keys())
-  placeholders = ', '.join(['?'] * len(values))
-  print(type(values), 'values',values, type(columns), 'columns', columns)
-  sql_stmt = f'SELECT id FROM rules WHERE '
-  sql_stmt += " AND ".join([f"{key} = ?" for key in columns])
-  conn = sqlite3.connect('database.db')
-  c = conn.cursor()
-  c.execute(sql_stmt, values)
-  req_ids = c.fetchall()
-  conn.close()
-  print(type(req_ids), 'req_ids')
-  if len(req_ids) > 0:
-    for id in req_ids:
-      conn = sqlite3.connect('database.db')
-      c = conn.cursor()
-      stmt = 'UPDATE rules SET persistent = 1 WHERE id = ?'
-      c.execute(stmt, id)
-      conn.commit()
-      conn.close()
-    return True
-  else:
-    return False
+    values = list(params.values())
+    columns = list(params.keys())
+    query = f'SELECT id FROM rules WHERE '+ ' AND '.join([f'{key} = ?' for key in columns])
+    conn = sqlite3.connect('database.db')
+    cur = conn.cursor()
+    cur.execute(query, values)
+    req_ids = cur.fetchall()
+    conn.close()
+
+    if len(req_ids) > 0:
+        conn = sqlite3.connect('database.db')
+        cur = conn.cursor()
+        query = 'UPDATE rules SET persistent = 1 WHERE id = ?'
+        for id in req_ids:    
+            cur.execute(query, id)        
+        conn.commit()
+        conn.close()
+        return True
+    else:
+        return False
+
+def convert_iso_str_to_utc_datetime (str_date):
+    return datetime.datetime.fromisoformat(str_date).astimezone(datetime.timezone.utc)
+
+def mail_query_builder(params):
+    query = ''
+    query_params = []
+    rule_columns = []
+    for (key,value) in params.items():
+        if len(value) != 0: #field is not empty
+            rule_columns.append(key)
+            if key in ['subject', 'content', 'sender']:
+                query = query + key + ' REGEXP \"' + value + '\" AND '
+            elif key == 'before': 
+                query = query + 'received_date < ? AND '
+                query_params.append(convert_iso_str_to_utc_datetime(value))
+            elif key == 'after': 
+                query = query + 'received_date > ? AND '
+                query_params.append(convert_iso_str_to_utc_datetime(value))
+            elif key == 'has_attachment': 
+                query = query + 'has_attachment = '+str(bool(value))+' AND '
+    if len(query) > 1:
+        query = query[:-5] #removes last AND
+    return 'SELECT id FROM messages WHERE '+query, query_params, rule_columns
+
 
 def check(cb,params):
-  print(cb)
-  print(params)
-  if not is_persistent(params):
-    stmt = ""
-    stmt_params = []
-    rule_columns = []
-    for (k,v) in params.items():
-        if len(v) != 0: #field is not empty
-            rule_columns.append(k)
-            if((k=='subject') or (k=='content') or (k=='sender')):#regex
-                stmt = stmt+k+" REGEXP \""+v+"\" AND "
-            elif(k=='before'): #datetime 
-                stmt = stmt+"received_date < ? AND "
-                stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
-            elif(k=='after'): #datetime
-                stmt = stmt+"received_date > ? AND "
-                stmt_params.append(datetime.datetime.fromisoformat(v).astimezone(datetime.timezone.utc))
-            elif(k=='has_attachment'): #bool
-                stmt = stmt+"has_attachment = "+str(bool(v))+" AND "
-    if len(stmt)>1:
-        stmt = stmt[:-5] #removes last AND
-    sql = "SELECT id FROM messages WHERE "+stmt
-    conn = sqlite3.connect('database.db')
-    conn.enable_load_extension(True)
-    c = conn.cursor()
-    c.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
-    c.execute(sql, stmt_params)
-    res = c.fetchall()
-    conn.close()
-    if len(res) == 0:
-        rule_columns.append('callback')
-        rule_values = list(params.values())
-        rule_values.append(cb)
-        rule_values = [x for x in rule_values if x != ""]
-        for x in rule_columns:
-            if x == 'after':
-                rule_columns[rule_columns.index(x)] = 'date_after'
-            elif x == 'before':
-                rule_columns[rule_columns.index(x)] = 'date_before'
-        placeholders = ', '.join(['?'] * len(rule_values))
-        insert_into_stmt = f'INSERT INTO rules ({", ".join(rule_columns)}) VALUES ({placeholders})'
+    if not is_persistent(params):
+        query = ''
+        query_params = []
+        rule_columns = []
+        for (key,value) in params.items():
+            if len(value) != 0: #field is not empty
+                rule_columns.append(key)
+                if key in ['subject', 'content', 'sender']:#regex
+                    query = query + key + ' REGEXP \"' + value + '\" AND '
+                elif key == 'before': #datetime 
+                    query = query + 'received_date < ? AND '
+                    query_params.append(convert_iso_str_to_utc_datetime(value))
+                elif key=='after': #datetime
+                    query = query + 'received_date > ? AND '
+                    query_params.append(convert_iso_str_to_utc_datetime(value))
+                elif key=='has_attachment': #bool
+                    query = query + 'has_attachment = '+str(bool(value))+' AND '
+        if len(query)>1:
+            query = query[:-5] #removes last AND
+        final_sql_query = mail_query_builder(params)
+
         conn = sqlite3.connect('database.db')
-        c = conn.cursor()
-        c.execute(insert_into_stmt, rule_values)
-        conn.commit()
+        conn.enable_load_extension(True)
+        cur = conn.cursor()
+        cur.execute('SELECT load_extension("/usr/lib/sqlite3/pcre.so")')
+        cur.execute(final_sql_query, query_params)
+        res = cur.fetchall()
         conn.close()
-        print('No matches found, adding rule to database')
-    else:
-        matched_email_stmt = 'SELECT * FROM messages WHERE id = ?'
-        conn = sqlite3.connect('database.db')
-        c = conn.cursor()
-        to_delete = min(res)
-        c.execute(matched_email_stmt, to_delete)
-        res = c.fetchone()
-        print('Match found:', res)
-        print('res removing id', res[2:]) #removes the id and the mail_id
-        res_dict_vals = list(res[2:])
-        res_dict_keys = ['date','subject','sender','content', 'has_attachment']
-        dict_result = {}
-        for k, v in zip(res_dict_keys, res_dict_vals):
-            dict_result[k] = v
-        result = json.dumps(dict_result)
-        requests.put(cb,data=result, headers={'content-type': 'application/json'})
-        c.execute('DELETE FROM messages WHERE id = ?', to_delete)
-        conn.commit()
-        conn.close()
+
+        if len(res) == 0:
+            rule_columns.append('callback')
+            rule_values = list(params.values())
+            rule_values.append(cb)
+            rule_values = [x for x in rule_values if x != '']
+            for x in rule_columns:
+                if x == 'after':
+                    rule_columns[rule_columns.index(x)] = 'date_after'
+                elif x == 'before':
+                    rule_columns[rule_columns.index(x)] = 'date_before'
+            placeholders = ', '.join(['?'] * len(rule_values))
+            insert_into_stmt = f'INSERT INTO rules ({", ".join(rule_columns)}) VALUES ({placeholders})'
+            conn = sqlite3.connect('database.db')
+            cur = conn.cursor()
+            cur.execute(insert_into_stmt, rule_values)
+            conn.commit()
+            conn.close()
+            print('No matches found, adding rule to database')
+        else:
+            matched_email_query = 'SELECT * FROM messages WHERE id = ?'
+            conn = sqlite3.connect('database.db')
+            cur = conn.cursor()
+            to_delete = min(res)
+            cur.execute(matched_email_query, to_delete)
+            result = cur.fetchone()
+            print('Match found:', result)
+
+            res_dict_vals = list(result[1:]) #removes the id
+            res_dict_keys = ['date','subject','sender','content', 'has_attachment']
+
+            dict_result = {}
+            for key, value in zip(res_dict_keys, res_dict_vals):
+                dict_result[key] = value
+            result = json.dumps(dict_result)
+            requests.put(cb,data=result, headers={'content-type': 'application/json'})
+            
+            cur.execute('DELETE FROM messages WHERE id = ?', to_delete)
+            conn.commit()
+            conn.close()
 
 def check_is_date(date):
     try:
         datetime.datetime.fromisoformat(date)
         return True
-    except:
+    except Exception as e:
         print('The given input was not a valid date according to ISO 8601.')
-        #TODO: fetch detailed error message
+        print(f'{e}')
         return False
 
 def check_is_regex(pattern):
@@ -161,47 +157,64 @@ def check_is_bool(input):
     return input == 0 or input or isinstance(input, bool)
 
 def valid_input(params):
-    print('in validity check', type(params), params, params.items(), params.keys(), params.values())
-    for k,v in params.items():
-        if v != '':
-            if k == 'subject' or k == 'content' or k == 'sender':
-                print('perform regex check', v)
-                if not check_is_regex(v):
+    for key, value in params.items():
+        if value != '':
+            if key in ['subject', 'content', 'sender']:
+                if not check_is_regex(value):
                     return False
-                print(check_is_regex(v))
-            elif k == 'after' or k == 'before':
-                print('perform date iso check',v)
-                if not check_is_date(v): 
+            elif key in ['after', 'before']:
+                if not check_is_date(value): 
                     return False
-                print(check_is_date(v))
-            elif k == 'has_attachment':
-                print('perform bool check',v)
-                if not check_is_bool(v):
+            elif key == 'has_attachment':
+                if not check_is_bool(value):
                     return False
-                print(check_is_bool(v))
             else:
-                print('throw exception for wrong keys')
+                print(key+ 'is an invalid key. Please provide only one of the following keys: date_after, date_before, subject, sender, content, has_attachment')
                 return False
         else:
-            if k not in ('subject','content','sender','after','before','has_attachment'):
+            if key not in ('subject','content','sender','after','before','has_attachment'):
                 print('throw exception for wrong keys')
                 return False
     return True
 
-@route('/get_matching_message')
+@route('/')
 def index():
+    conn = sqlite3.connect('database.db')
+    cur = conn.cursor()
+    cur.execute('SELECT id, sender, subject, date_after, date_before, has_attachment, content, persistent FROM rules')
+    rules_res = cur.fetchall()
+    cur.execute('SELECT id, sender, subject, received_date, has_attachment, content FROM messages')
+    messages_res = cur.fetchall()
+    conn.close()
+    output = template('make_queues', {'rules': rules_res, 'messages': messages_res})
+    return output
+
+@route('/toggle_persistence', method='POST')
+def togglePersistence():
+    conn = sqlite3.connect('database.db')
+    cur = conn.cursor()
+    cur.execute('UPDATE rules SET persistent = ? WHERE id = ?', list(request.json.values()))
+    conn.commit()
+    conn.close()
+    response.headers.content_type =  'text/plain; charset=UTF-8'
+    response.status = 200
+    response.body = ''
+    return response
+
+@route('/get_matching_message')
+def match_message():
     if not valid_input(request.params):
-        response.status = 400
         response.headers.content_type = 'text/plain; charset=UTF-8'
-        response.headers['cpee-callback'] = 'false'
-        response.body = 'Please check that your input complies with the provided format: TODO lorem ipsum...'
+        response.headers['CPEE-CALLBACK'] = 'false'
+        response.status = 400
+        response.body = 'Please check that your input complies with the provided format: subject, sender, content: regex, date_after, date_before: iso8601 compliant date, has_attachment: boolean'
         return response
     else:
         response.headers.content_type =  'text/plain; charset=UTF-8'
         response.headers['CPEE-CALLBACK'] = 'true'
         response.status = 200
         response.body = ''
-        thread = Thread(target=check, args=[request.headers['Cpee-Callback'],request.params])
+        thread = Thread(target=check, args= [request.headers['Cpee-Callback'], request.params])
         thread.start()
         return response
 
