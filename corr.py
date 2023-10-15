@@ -150,11 +150,11 @@ def valid_input(params):
                 if not check_is_bool(value):
                     return False
             else:
-                print(key+ 'is an invalid key. Please provide only one of the following keys: date_after, date_before, subject, sender, content, has_attachment')
+                print(key+ 'is an invalid key. Please provide only one of the following keys: after, before, subject, sender, content, has_attachment')
                 return False
         else:
             if key not in ('subject','content','sender','after','before','has_attachment'):
-                print('throw exception for wrong keys')
+                print(key + 'is an invalid key. Please provide only one of the following keys: after, before, subject, sender, content, has_attachment')
                 return False
     return True
 
@@ -188,7 +188,7 @@ def match_message():
         response.headers.content_type = 'text/plain; charset=UTF-8'
         response.headers['CPEE-CALLBACK'] = 'false'
         response.status = 400
-        response.body = 'Please check that your input complies with the provided format: subject, sender, content: regex, date_after, date_before: iso8601 compliant date, has_attachment: boolean'
+        response.body = 'Please check that your input complies with the provided format: subject, sender, content: regex, after, before: iso8601 compliant date, has_attachment: boolean'
         return response
     else:
         response.headers.content_type =  'text/plain; charset=UTF-8'

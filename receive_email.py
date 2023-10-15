@@ -1,4 +1,4 @@
-#/usr/bin/python3
+#!/usr/bin/python3
 import email
 from email import policy
 
