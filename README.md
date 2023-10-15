@@ -6,113 +6,44 @@ Coordination and communication in automated process-oriented systems are essenti
 ## Motivation
 Message correlators play a crucial role in process aware information systems (PAIS), synchronizing inter- and intra-process communication and supporting process instance choreography scenarios. Their purpose is to address the challenges of coordinating asynchronous messages, ensuring they reach the right destination at the right time given the right conditions. With a message correlator, it is possible to align incoming and outgoing messages based on a set of predefined rules, offering a structured approach that contributes to security, maintainability, efficiency, and reliability of asynchronicity in PAIS.
 
-Message correlators can differ in their implementations, but each correlator has to comply with and consider certain points in order to execute its task:
-- Message reception behavior
-    - Message analysis
-    - Target identification
-- Data retention policy
-Data flow/ action flow: The process engine will ask an external service for results, which will interact with the correlator.
-A correlator has to react to an external event - it either starts a new process, or waits on an external message. when it waits, the source may be unknown, the source may send the message long before an instance needs the value; or the value may be sent after an instance needing the value. the contents of the message contain the key to decide what to do.
+## Correlator Functionality
+Message correlators can differ in their implementation, but each correlator has to define its behavior regarding two different communication items: messages and requests. We list the tasks it has to fulfill for handling both:
 
-One specific issue that occurs when a message correlator Another important aspect of communication is repetition. When important information needs to be sent repetitively, it costs resources and time, making it a hassle to reformulate the exact same request repeatedly. In such scenarios, it is convenient to have a rule become persistent, allowing messages to apply multiple times due to their relevance for different endpoints. Our custom message correlator fulfills this criteria and offers the possibility for a rule to become persistent, thus making the message be stored for yet another incoming rule, as this message
+1) Message Handling: How messages are managed when they arrive at the correlator.
+    1) Message Reception: A correlator has to receive messages from arbitrary sources. What constitutes as a message (source, type) is defined by the correlator. 
+    2) Message Analysis: The contents of the message need to be analyzed to extract relevant information for correlation.
+    3) Message Forwarding / Matching:  After attempting to match with existing requests, the message needs to be forwarded. We distinguish variations in forwarding behavior as follows:
+        1) The message is forwarded to a potential instance that is waiting for the message, or
+        2) The message is stored for later use, or 
+        3) A new instance of a process is created, with the message as input.
+4) Request Handling: How correlation requests are managed when they arrive at the correlator.
+    1) Request reception: Process instances may require messages from sources they cannot directly contact. They create a correlation request to ask for the required information from the correlator. The correlator needs to be able to receive these requests.
+    2) Request Analysis: The correlation request has to be analyzed by its provided correlation rules to identify what information it requires the message to contain, the criteria the message needs to fulfill, and where it can be found.
+    2) Request Forwarding / Matching: The correlator is responsible for finding the message that best correlates with the rule provided by the request. It must then forward the request by:
+        1) Forwarding the message to the requesting instance, or 
+        2) Storing the request when there is no match, or
+        3) Defining different behavior for the request in case of no match or a match.
 
-Things that are important for correlation to work, and that have to be defined when implementing a custom correlator:
-- Data retention policy: What happens to a message that is matched with a rule? Is it dropped, is it stored indefinitely/for a limited time, can it be replaced by existing messages?
-- Message reception behavior: How does the correlator behave when there is a matching correlation rule(instantiate the process), when there is a matching correlation request(forward message or data retention), and when there is no match(data retention policy)? 
+We will define how we implemented each of these in our custom e-mail correlator and elaborate an addition we made in its request and message handling in the following section.
 
-## What is correlation?
-Patterns - Point of View:
-• Ask for information: the process engine asks an external service for some results.
-• React on some external event:
-• A new process instance has to be started.
-• Waiting for some external message.
-• External source may be unknown.
-• External source may send the message long before an instance is needing
-the value.
-• External source may send the value long after an instance is needing the value.
-• The contents of a message contain the key to decide what to do
+## Implementation
+We implemented our custom e-mail message correlator using Bottle, Python and JavaScript. A SQLite database is used for saving and fetching information.
 
-## How is correlation done?
-A correlator has to receive messages from arbitray sources, and analyze the contents of the message. A message might be an e-mail received via IMAP, a word document received via HTML Form upload, or more generic: any fileformat submitted through any means/protocol. The message needs to be forwarded to a potential instance that is waiting for the message, or stored for later use or a new instance of a process, with the message as input is created.
+Our correlator consists of two major Python files: corr.py and receive_email.py.
+The corr.py creates the part of the correlator that handles incoming requests, whereas the receive_email.py file handles incoming messages.
 
-A correlator requires a set of rules to analyse incoming messages, the message type, e.g. email, where to look in message, e.g. subject contains ticket number and lastly, what to do with the message: whether to forward it or instantiate.
+The request handling is defined as follows: When we listen to process instances from our endpoint, we receive correlation requests. Its correlation rule is checked for its validity (see how a correlation rule is modeled in Figure XYZ) before it is accepted. Upon receiving a valid request, we fetch every message that is available from the database and attempt a match between the provided correlation rules and the existing messages. We can either find a match or none.
+- When there is a match, we fetch the message from the database and send it to the callback URL. The message is deleted from the database and the request is dropped.
+- When there is no match, we save our request with its correlation rules and their callback-URL in the database. It receives an ascending ID.
 
-## Message analysis
-A correlator will support a set of sources: Mailbox, HTTP/REST file upload. A correlator will support a set of file types that can be analysed, e.g.
-• A means to read and analyse the contents of a word file
-• A means to read and analyse the contents of a excel file
-• A means to read and analyse the contents of a CAD file
+However, if we receive a request containing a rule that already is present within the database, we do not save it, but instead make the older rule entry peristent by changing its persistent value to true in the database. This changes the message rentention on a match, which is explained in the next section. 
 
-A correlator will support a rule language to describe how to extract correlation information, e.g.:
-• A word files contanins the signature of a particular person at the end of
-page 7, contains a ticket number in the form /#\w{12}/ on page 2, and has a
-heading “Customer Contract” on page 1
-• An excel sheet has three worksheets, and on the first worksheet cell A1
-contains the identifier of the customer
+We handle messages in a similar manner. Every full minute, our script fetches unread e-mails from the inbox of the e-mail 'prakss23@gmail.com'. When there is a unread, and therefore new e-mail, we initiate the message handling process:
+The content of the e-mail is extracted based on the parts we modeled in Figure XYZ. We then fetch all requests from our database and check if the incoming message matches with any of the saved requests. 
 
-## Target Identification
-Processes that are to be instantiated have to contain correlation rules when to do so. The correlation rule poses a criteria where and which message contents to check for ...e.g.
-• A word file contains the signature of a particular person at the end of page 7, contains a ticket number in the form /#\w{12}/ on page 2, and has a heading “Customer Contract” on page 1
-• The rule is generic, any match leads to an instantiation
-• The message is an input to the resulting process instance, see P2 on the left
-• The correlator has to analyse each process model to extract the correlation rules
-
-Instances that require certain message (but no direct means to contact a source) have to make a correlation request to get the required information from the correlator:
-• I need a word files contanins the signature of John Boss at the end of page 7, contains a ticket number in the form #QWER12tzui34 on page 2, and has a heading “Customer
-Contract” on page 1
-• The request is very special, this one particular message matches
-• The correlator can store a list of requests on the fly, and delete entries whenever a request has fullfilled
-
-## Message Received
-A matching correlation rule exists:
-• instantiate process
-A matching correlation request exists:
-• forward message
-• Data Retention
-No matches exists:
-• Data Retention
-
-## Data Retention
-A message that instantiates a process: drop message after instantiation
-A message that matches a correlation request - a retention policy has to exist:
-• No policy: drop the message after forward
-• Store indefinitely
-• Other requests can be answered
-• Store for a limited time
-• Other requests can be answered
-• Additional parameters have to be fulfilled in order to reuse the message to fulfill request
-• E.g. a requestor has to submit a code to get the info
-• Queue vs. Slot
-• Slot - Messages can replace other existing messages - only the newest message fitting a correlation request is stored
-• Queue - All messages are stored - the newest message fitting a correlation request is
-delivered
-
-## What do correlators contribute to?
-Security: correlators connect external systems to internal process instances without exposing the internal structure.
-Loose Coupling: external systems have a single point where to send information.
-Policy Enforcing: how to deal with message retention - loose coupling & maintainability.
-Compliance Checking: incoming data can be checked before it enters internal infrastructure
-Maintainabilty: single place to deal with incoming messages. No need to implement anything in the engine.
-The alternative would be much more complicated and relying on tighly coupled system.
-
-## Implementation //How
-We implemented our custom e-mail message correlator using Bottle for our server-side functions, creating the frontend using the .tpl format offered by Bottle and JavaScript. A SQLite database is used for saving and fetching information.
-
-The files are structured in the directory prakss23 as follows:
-- | /_| view
--     |- make_queues.tpl
-- | corr.py
-- receive_email.py
-- init_db.py
-- database.db
-- email_schema.sql
-- rule_schema.sql
-
-Our correlator consists of two major Python files:
-corr.py and receive_email.py. [TODO]
-The corr.py creates a part of the correlator that 
-
-We modeled an e-mail message for our custom message correlator as follows:
+## Models
+As we chose e-mails as our message type, we chose a specific e-mail address' inbox as the source of our messages.
+In our correlator, we modeled an e-mail message as follows:
 [TODO: UML]
 As depicted in Figure XYZ, an e-mail message has a sender, a subject, a date when it is received, a content field, as well as a boolean indicator of whether it has attachments or not.
 
@@ -127,10 +58,6 @@ ISO 8601 rule:
 Boolean rule:
 - has_attachment
 The regular expression sent to the correlator will then be matched to the 
-
-- choreography scenarios
-- inter/intra-process synchronization
-- correlation patterns, dealing with data retention.
 
 ### Architecture
 The correlator works by running the corr.py file, which serves as a connection to the CPEE-Engine. [TODO mention it in the beginning?] The file also serves the frontend and offers on an initial database boot the following interface:
