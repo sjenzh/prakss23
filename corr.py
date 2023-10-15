@@ -19,6 +19,15 @@ from bottle import (
 
 TEMPLATE_PATH.append(str(Path('prakss23')/ 'views'))
 
+def set_persistence(ids):
+    conn = sqlite3.connect('database.db')
+    cur = conn.cursor()
+    query = 'UPDATE rules SET persistent = 1 WHERE id = ?'
+    for id in ids:    
+        cur.execute(query, id)        
+    conn.commit()
+    conn.close()
+    
 def is_persistent(params):
     values = list(params.values())
     columns = list(params.keys())
@@ -30,13 +39,7 @@ def is_persistent(params):
     conn.close()
 
     if len(req_ids) > 0:
-        conn = sqlite3.connect('database.db')
-        cur = conn.cursor()
-        query = 'UPDATE rules SET persistent = 1 WHERE id = ?'
-        for id in req_ids:    
-            cur.execute(query, id)        
-        conn.commit()
-        conn.close()
+        set_persistence(req_ids)
         return True
     else:
         return False
