@@ -26,60 +26,109 @@ Message correlators can differ in their implementation, but each correlator has 
 
 We will define how we implemented each of these functionalities in our custom e-mail correlator and describe an addition we made in its request and message handling in the following sections.
 
+## Software Architecture
+The correlator is written using mainly Python and Bottle. The frontend depicting the correlator rule and message waiting queues is served through a Bottle template and uses JavaScript to communicate with the Python Backend. We use SQLite for our database.
+
+![Software Architecture](documentation/sa.png)Figure 1: Sketch depicting the software architecture of the custom e-mail message correlator.
+
+As depicted in the figure above, our correlator consists of the following parts: A correlation request/rule handling component (corr.py), a message-handling component (receive_email.py), a database (database.db) which is initialized by the init_db.py script, and a template generating our frontend reprssentation for the waiting queues, make_queues.tpl.
+
+The file corr.py connects the correlator to the CPEE process engine, listening to HTTP GET requests sent to the endpoint https://lehre.bpm.in.tum.de/21047/get_matching_message for a CPEE process instance's correlation request/rule. The correlation request sent has to comply with the correlation rule model, which is further specified in the model section below.
+
+The file receive_email.py connects the correlator to the message provider, which in this specific case is the inbox of a Google Mail account (prakss23@gmail.com), by fetching unread e-mails from its inbox every full minute with IMAP. These e-mails are then processed according to our established model for messages (see model section below).
+
+The correlation of rules to messages occurs on the corr.py side, whereas the correlation of messages to rules occurs on the receive_email.py side.
+
 ## Message and Request Model
-We have chosen e-mails as our message type. In this section, we define what parts of an e-mail message constitutes as content to be parsed and analyzed for our custom correlator. We have modeled the e-mail message as follows:
+In this section, we define what parts of an e-mail message constitutes as content to be parsed and analyzed for our custom correlator. The end result is defined in our database schema files email_schema.sql (message) and rule_schema.sql (correlation rule/request).
 
-[TODO: UML]
+![E-mail and Rule Model](documentation/mr_model.png)
+Figure 2: E-mail and Rule model for our custom e-mail message correlator.
 
-As depicted in Figure XYZ, an e-mail message within the context of our correlator has a sender, a subject, a date when it is received, a content field, as well as a boolean indicator of whether it has attachments or not. We also use this model for our database schema, which is why we have a unique numeric auto-incrementing field called "ID", which serves as an indicator of how long the saved e-mail has waited within the matching queue (the lower the number, the higher its priority during matches).
+As depicted in the figure above, an e-mail message within the context of our correlator has a sender, a subject, a date when it is received, a content field, as well as a boolean indicator of whether it has attachments or not. We also use this model for our database schema, which is why we have a unique numeric auto-incrementing field called "ID", which serves as an indicator of how long the saved e-mail has waited within the matching queue (the lower the number, the higher its priority during matches). The subject and content of any e-mail message can be potentially empty, which is why we modeled both of them to be optional.
 
-To model a correlation rule, we defined its properties based on the previous e-mail model. It is essential for the correlator to be able to match the e-mail messages we modeled in Figure XYZ with the rules, so we provide attributes tailored to the datatype of the respective field. We categorize the different attributes based on their rule category:
-Regular Expression rule:
+To model a correlation rule, we defined the rule parameter specifications and their types based on the e-mail message model. It is essential for the correlator to be able to match the e-mail messages we modeled in Figure 2 with the rules, so we provide attributes tailored to the datatype of the respective field. We categorize the different attributes based on their rule category:
+
+Regular Expression rules:
 - sender
 - subject
 - content
-ISO 8601 rule:
-- date_before
-- date_after
+
+ISO 8601 rules:
+- before
+- after
+
 Boolean rule:
 - has_attachment
-The rules indicate what possible inputs can be used for the respective fields. For example, if a correlation request sends a correlation rule with the "has_attachment" field filled in with any input other than a boolean, it would be rejected because it does not comply with the given model.
 
-In addition to the attributes used for matching, our model also includes the field "ID" which serves a similar function to the "ID" in the e-mail message model. It indicates the rule's position in the queue, with a lower number indicating a higher priority. The model also has two further fields: the "callback" field containing the callback URL and the "persistent" field, which indicates whether the given rule is persistent or not.
+The rules indicate what possible inputs can be used for the respective fields. For example, if a correlation request sends a correlation rule with the "has_attachment" field filled in with any input other than boolean, it would be rejected because it does not comply with the given model. It is always possible to create a rule with no restriction criterias, therefore we added the optional behind every field that can be sent from the process instance to our correlator as optional. 
 
-### Architecture
-The correlator works by running the corr.py file, which serves as a connection to the CPEE-Engine. [TODO mention it in the beginning?] The file also serves the frontend and offers on an initial database boot the following interface:
-Two empty tables with their respective columns modeling the email and rules.
-The corr.py file will listen on the endpoint https://lehre.bpm.in.tum.de/21047/get_matching_message for a CPEE process instance's request.
-Once a process instance sends a request, the file will
-[TODO persistency]
+In addition to the attributes used for matching, our model also includes the field "ID" which serves a similar function to the "ID" in the e-mail message model. It indicates a non-matched rule's position in the queue, with a lower number indicating a higher priority. Rules also have two further fields: the "callback" field containing the callback URL and the "persistent" field, which indicates whether the given rule is persistent or not.
 
-## Implementation
-We implemented our custom e-mail message correlator using Bottle, Python and JavaScript. A SQLite database is used for saving and fetching information.
+## Functionality
+We will now showcase and discuss the functionality of the two major components in our correlator: corr.py and receive_email.py. The file corr.py is responsible for handling incoming correlation requests, whereas receive_email.py is responsible for handling incoming messages.
 
-Our correlator consists of two major Python files: corr.py and receive_email.py.
-The corr.py creates the part of the correlator that handles incoming requests, whereas the receive_email.py file handles incoming messages.
+![endpoint_definition](documentation/endpoint.png)
+Figure 3: CPEE process instance with highlighted points relevant for endpoint specification and invalid arguments. As depicted, we need to specify the endpoint according to the highlighted areas in the figure first. This specific image also showcases an invalid argument pair (has_attachment expects a boolean, not a string) - causing the process instance to stop upon execution, as it receives 400 as a response.
 
-The request handling is defined as follows: When we listen to process instances from our endpoint, we receive correlation requests. Its correlation rule is checked for its validity (see how a correlation rule is modeled in Figure XYZ) before it is accepted. Upon receiving a valid request, we fetch every message that is available from the database and attempt a match between the provided correlation rules and the existing messages. We can either find a match or none.
-- When there is a match, we fetch the message from the database and send it to the callback URL. The message is deleted from the database and the request is dropped.
-- When there is no match, we save our request with its correlation rules and their callback-URL in the database. It receives an ascending numeric ID to distinguish its priority during matching, with a smaller ID indicating the rule being older, and therefore prioritized.
+We will now follow the request handling process: When we listen to process instances from our endpoint(see highlighted configuration in Figure 3), we receive correlation requests. Its correlation rule is checked for its validity based on our correlation rule model in Figure 2 before it is accepted. 
 
-However, if we receive a request containing a rule that already is present within the database, we do not save it, but instead make the older rule entry peristent by changing its persistent value to true in the database. This changes the message rentention on a match, which is explained in the next section. 
+Upon receiving a valid request, we fetch every message that is available from the database and attempt a match between the provided correlation rules and the existing messages. We can either match the rule with messages or not at all.
 
-We handle messages in a similar manner. Every full minute, our script fetches unread e-mails from the inbox of the e-mail 'prakss23@gmail.com'. When there is an unread, and therefore new e-mail, we initiate the message handling process:
-The content of the e-mail is extracted based on the parts we modeled in Figure XYZ. We then fetch all requests from our database and check if the incoming message matches with any of the saved requests. It can either match or not.
+
+![Frontend waiting queues, with the message queue being populated by two messages, one of them containing the subject 'matcha'](documentation/waitingqueue_message.png)
+![Pre-match-CPEE view](documentation/pre_match.png)
+![Post-match-CPEE view](documentation/success_cpee.png)
+![Post-match waiting queue](documentation/success_queue.png)
+Figure 4: This series of images depicts a successful correlation request match initiated by corr.py. The waiting queue for messages is non-empty. We proceed to send a correlation request with the rule that the subject must contain the regular expression 'matcha' over CPEE, which matches with an e-mail. Upon matching, the process instance is depicted to continue from its previous state, and due to the output handling specification, we can see that result contains the e-mail messages' content. This e-mail message is also subsequently removed from the waiting queue and by extention, the database.
+
+- When there is a match, we fetch the message from the database and send it to the callback URL. The message is deleted from the database and the request is dropped. (Figure 4)
+
+- When there is no match, we save our request with its correlation rules and their callback-URL in the database. It receives an ascending numeric ID to distinguish its priority during matching, with a smaller ID indicating the rule being older, and therefore prioritized. (Figure 5)
+
+![No-Match Correlation Request](documentation/waiting_process_cpee.png)
+![No-Match Queue representation](documentation/waiting_queue_corr.png)
+Figure 5: A series of images depicting a no-match situation from the corr.py perspective. The first image depicts the process instance stopping after the correlation rule with subject as "abcdefg" could not find a matching message in the waiting queue, and therefore has stopped its execution while waiting for its callback. The second image depicts the rule added to the waiting queue on the frontend of our application.
+
+However, if we receive a request containing a rule that already is present within the database, we do not save it, but instead make the older rule entry persistent by changing its persistent value to true in the database (Figure 6). This changes the message rentention on a match, which is explained in the next section. 
+
+![Persistent-CPEE request](documentation/cpee_persistent.png)
+![Persistent-Frontend toggle change](documentation/frontend_persistent.png)
+Figure 6: When sending an additional correlation request from another process instance with the exact same set of correlation rules that are already in the waiting queue, the existing rule is automatically set as persistent, as depicted in the second image.
+
+We handle messages in a similar manner. Every full minute, our script fetches unread e-mails from the e-mail inbox of the address 'prakss23@gmail.com'. When there is an unread, and therefore new e-mail, we initiate the message handling process:
+
+The content of the e-mail is extracted based on the parts we modeled in Figure 2. We then fetch all requests/rules from our database and check if the incoming message matches with any of the saved requests. It can either match or not.
 When it does match, we distinguish two cases:
 
-1) When it matches a non-persistent rule, the message is forwaded to the callback URL associated with the rule. The rule is subsequently deleted from the database and the e-mail message is dropped.
-2) When it matches a persistent rule, the message is forwarded to the callback associated with the rule, but the e-mail message is not deleted. It is saved in the database, as a persistent rule indicates that messages that match with it may be requested again.
+1) When it matches a non-persistent rule, the message is forwaded to the callback URL associated with the rule. The rule is subsequently deleted from the database and the e-mail message is dropped. (Figure 7)
 
-When the e-mail message does not find any matching rules, it is saved into the database, with an ascending ID to distinguish its priority in the queue.
+2) When it matches a persistent rule (Figure 8), the message is forwarded to the callback associated with the rule, but the e-mail message is not deleted. It is saved in the database, as a persistent rule indicates that messages that match with it may be requested again.
 
-Both waiting queues are visualized by the frontend of the correlator, which showcases the requests/rules and messages currently saved in the queue. One feature that the frontend also provides is the possibility to manually adjust a rule to become persistent and not persistent. To toggle and therefore change the rule's persistency, simply click on the row it is featured to make it persistent (1) or not persistent(0) and refresh the browser to check its current state.
+![Nonpersistentrulefrontend](documentation/frontendqueues_emailsetup.png)
+![emailinboxunreadmatch](documentation/gmail_marshmallow.png)
+![postmatch-nonpersistentrule-frontend](documentation/postmatch_marshmallow.png)
+![postmatch-marshmallow-cpee](documentation/marshmallow_matchcpee.png)
+Figure 7: This series of images shows a match made with an incoming e-mail matching to a non-persistent rule in the database. After the new incoming e-mail matches to the content regular expression 'marshmallow', the rule is subsequently removed from the rule queue, and the message is dropped. The message, as we can see in the last image, was forwarded to the CPEE process instance and passed to it as the data element named result.
 
-## Future Work
-As our e-mail model does not include every single attribute that is possible to consider, there are extensions that can be done on that end. It would be possible to extend the implementation to include the type of the file attachment, as well as its contents or meta information.
-We also envision possibilities in the area of data retention, where 
+
+![match-persistentrule-frontend](documentation/persistentqueue_prematch.png)
+![match-persistentrule-gmail](documentation/inbox_prematch_persistent.png)
+![match-peristentrule-frontendpostmatch](documentation/postmatchpersistentfrontend.png)
+Figure 8: This series of images shows a match made with an incoming e-mail matching to a persistent rule saved in the database. The message matches to the subject regular expression rule 'abcedfg', but is not dropped after its match. In the last image, we can see the messsage has been saved into the queue in spite of its match due the rule being persistent.
+
+When the e-mail message does not find any matching rules, it is saved into the database, with an ascending ID to distinguish its priority in the queue. (Figure 9)
+
+![unmatched-email-in-gmail-inbox](documentation/unmatched_email.png)
+![unmatched-email-infrontend](documentation/unmatched_email_frontend.png)
+Figure 9: An unmatched new message is saved into the message queue after finding no matching correlation rule in the database. 
+
+Both waiting queues are visualized by the frontend of the correlator, accessible under the URL https://lehre.bpm.in.tum.de/ports/20147/ when running the corr.py file. It showcases the requests/rules and messages currently saved in the queues. One feature that the frontend also provides is the possibility to manually adjust a rule to become persistent and not persistent. To toggle and therefore change the rule's persistency, simply click on the row it is featured to make it persistent (1) or not persistent(0) and refresh the browser to check its current state.
+
+## Use cases and Future Work
+As of now, our custom e-mail message correlator can be used for ordering or maintenance processes, where messages could be sent to the CPEE engine through e-mail. We can define specific patterns to look out for in e-mails to distinguish orders from maintenance tasks for example, or have customers make custom recipes that are registered through specific codes in the e-mail body.
+
+However, we see that our work can still be extended by different features. Our e-mail model does not include every single attribute that is possible to consider. We can imagine an extension to include the type of the file attachment, as well as its contents or meta information which may be relevant for maintenance or ordering tasks. Our frontend also does not offer a continuous update option, requiring the user to refresh manually whenever they wish to see the current state of the waiting queues. Graphically, the frontend user interface could also have additional styling to make it appear more appealing.
 
 
 ## Notes/References
@@ -93,3 +142,4 @@ if the content type is text/plain #TODO what other content types are there to co
 if the message isn't multipart, just extract it
 - https://campus.tum.de/tumonline/ee/ui/ca2/app/desktop/#/slc.tm.cp/student/courses/950691568?$ctx=design=ca;lang=de&$scrollTo=toc_overview
 - https://humberto.io/blog/sending-and-receiving-emails-with-python/
+- https://lehre.bpm.in.tum.de/~mangler/Slides/Corr.pdf
